@@ -424,6 +424,28 @@ main{max-width:1920px;margin:auto;padding:32px 36px 12px}
   box-shadow:0 0 6px var(--cyan);
 }
 .file-card.selected .selected-badge{display:inline-flex}
+.file-card.selected.selected-ref{
+  border-color:#43e4d8;
+  background:linear-gradient(135deg,#10282b88,#0d1c25cc);
+  box-shadow:inset 3px 0 #43e4d8,0 0 16px rgba(67,228,216,0.2);
+}
+.file-card.selected.selected-cmp{
+  border-color:#b59bff;
+  background:linear-gradient(135deg,#23153688,#181025cc);
+  box-shadow:inset 3px 0 #b59bff,0 0 16px rgba(181,155,255,0.2);
+}
+.file-card.selected.selected-cmp .file-name{color:#f2e6fb;font-weight:600}
+.file-card.not-comparing{opacity:0.6}
+.file-card.not-comparing:hover{opacity:1}
+.selected-badge.badge-cmp{
+  color:#b59bff;
+  background:#26183d;
+  border-color:#65489f;
+}
+.selected-badge.badge-cmp::before{
+  background:#b59bff;
+  box-shadow:0 0 6px #b59bff;
+}
 .file-meta{font-size:10px;color:#71869b;margin:7px 0}
 .offset-field{display:flex;align-items:center;gap:7px;font-size:10px;color:#8295ac}
 .offset-field input{width:85px;padding:4px;font:11px var(--mono)}

@@ -23,6 +23,7 @@ const state = {
   tableFilter: '',
   files: [],
   activeReportId: null,
+  selectedReportIds: [],
   mode: 'zoom',
   alignment: 'elapsed',
   scale: 'raw',
@@ -272,44 +273,94 @@ function rebuild(){
 }
 
 function syncReportSelection(){
-  const id = state.activeReportId;
+  const sel = state.selectedReportIds || [];
+  const isCmp = sel.length === 2;
+
+  const clearBtn = $('clearSelectionBtn');
+  if(clearBtn) clearBtn.style.display = sel.length > 0 ? 'inline-block' : 'none';
+
   document.querySelectorAll('[data-report]').forEach(card => {
-    const active = id !== null && +card.dataset.report === id;
-    card.classList.toggle('selected', active);
+    const id = +card.dataset.report;
+    const isFirst = sel[0] === id;
+    const isSecond = sel[1] === id;
+    const isSelected = isFirst || isSecond;
+
+    card.classList.toggle('selected', isSelected);
+    card.classList.toggle('selected-ref', isFirst);
+    card.classList.toggle('selected-cmp', isSecond);
+    card.classList.toggle('not-comparing', sel.length > 0 && !isSelected);
+
     const btn = card.querySelector('[data-select-report]');
-    if(btn) btn.setAttribute('aria-pressed', String(active));
+    if(btn) btn.setAttribute('aria-pressed', String(isSelected));
+
+    const badge = card.querySelector('.selected-badge');
+    if(badge){
+      if(isCmp){
+        if(isFirst){
+          badge.textContent = '基準 A';
+          badge.className = 'selected-badge';
+        } else if(isSecond){
+          badge.textContent = '比較 B';
+          badge.className = 'selected-badge badge-cmp';
+        }
+      } else if(isFirst){
+        badge.textContent = '操作中';
+        badge.className = 'selected-badge';
+      }
+    }
   });
+
   document.querySelectorAll('[data-group-report]').forEach(grp => {
-    const active = id !== null && +grp.dataset.groupReport === id;
-    grp.classList.toggle('active', active);
+    const id = +grp.dataset.groupReport;
+    const isSelected = sel.includes(id);
+    grp.classList.toggle('active', isSelected);
   });
 }
 
 function selectReport(id, forceSelect = false){
-  const f = state.files.find(f => f.id === +id);
+  const targetId = +id;
+  const f = state.files.find(f => f.id === targetId);
   if(!f) return;
-  if(!forceSelect && state.activeReportId === f.id){
-    state.activeReportId = null;
-    syncReportSelection();
-    render();
-    status('已取消聚焦特定報表，所有報表曲線皆正常顯示。');
-    return;
-  }
-  const previous = +$('movingFile').value;
-  let swapped = false;
-  if(state.files.length > 1 && +$('referenceFile').value === f.id){
-    const reference = state.files.find(f => f.id === previous && f.id !== +id) || state.files.find(f => f.id !== +id);
-    if(reference){
-      $('referenceFile').value = String(reference.id);
-      swapped = true;
-      commonSignals();
+
+  if(!state.selectedReportIds) state.selectedReportIds = [];
+  const idx = state.selectedReportIds.indexOf(targetId);
+
+  if(!forceSelect && idx >= 0){
+    state.selectedReportIds.splice(idx, 1);
+  } else if(!forceSelect && state.selectedReportIds.length < 2){
+    state.selectedReportIds.push(targetId);
+  } else if(!forceSelect && state.selectedReportIds.length >= 2){
+    state.selectedReportIds[1] = targetId;
+  } else if(forceSelect){
+    if(!state.selectedReportIds.includes(targetId)){
+      if(state.selectedReportIds.length >= 2) state.selectedReportIds[1] = targetId;
+      else state.selectedReportIds.push(targetId);
     }
   }
-  $('movingFile').value = String(f.id);
-  state.activeReportId = f.id;
+
+  state.activeReportId = state.selectedReportIds[0] || null;
+
+  if(state.selectedReportIds.length >= 2){
+    $('referenceFile').value = String(state.selectedReportIds[0]);
+    $('movingFile').value = String(state.selectedReportIds[1]);
+    commonSignals();
+  } else if(state.selectedReportIds.length === 1){
+    $('movingFile').value = String(state.selectedReportIds[0]);
+  }
+
   syncReportSelection();
   render();
-  status(`操作中：${f.name}。趨勢圖與資料表已高亮聚焦該報表曲線，其餘報表淡化顯示。${swapped ? '原參考報表已切換為另一份報表。' : ''}`);
+
+  if(state.selectedReportIds.length === 2){
+    const f1 = state.files.find(f => f.id === state.selectedReportIds[0]);
+    const f2 = state.files.find(f => f.id === state.selectedReportIds[1]);
+    status(`雙報表比較：基準「${f1.name}」vs 比較「${f2.name}」。已高亮兩份報表曲線，其餘報表淡化；標尺浮動框顯示兩者現場數據。`);
+  } else if(state.selectedReportIds.length === 1){
+    const f1 = state.files.find(f => f.id === state.selectedReportIds[0]);
+    status(`操作中：${f1.name}。點選第二份報表即可直接進行雙報表比較。`);
+  } else {
+    status('已取消選取，所有報表曲線皆正常顯示。');
+  }
 }
 
 function commonSignals(){
@@ -325,10 +376,8 @@ function setMode(mode){
   document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
   canvas.style.cursor = mode === 'pan' ? 'grab' : mode === 'shift' ? 'ew-resize' : 'crosshair';
   if(mode === 'shift'){
-    if(state.activeReportId === null && $('movingFile').value){
-      state.activeReportId = +$('movingFile').value;
-      syncReportSelection();
-      render();
+    if((!state.selectedReportIds || state.selectedReportIds.length === 0) && $('movingFile').value){
+      selectReport(+$('movingFile').value, true);
     }
     const curFile = state.files.find(f => f.id === +$('movingFile').value);
     status(`單份報表平移：${curFile ? curFile.name + ' ' : ''}在圖中左右拖曳即可調整時間偏移。`);
@@ -811,16 +860,17 @@ function draw(){
     ctx.setLineDash([]);
   }
 
-  const hasActive = state.activeReportId !== null && state.files.some(f => f.id === state.activeReportId);
-  const orderedVisible = hasActive
-    ? [...visible.filter(s => s.f.id !== state.activeReportId), ...visible.filter(s => s.f.id === state.activeReportId)]
+  const selIds = state.selectedReportIds || (state.activeReportId !== null ? [state.activeReportId] : []);
+  const hasFilter = selIds.length > 0;
+  const orderedVisible = hasFilter
+    ? [...visible.filter(s => !selIds.includes(s.f.id)), ...visible.filter(s => selIds.includes(s.f.id))]
     : visible;
 
   for(const { f, c } of orderedVisible){
-    const isActive = !hasActive || f.id === state.activeReportId;
+    const isActive = !hasFilter || selIds.includes(f.id);
     ctx.strokeStyle = c.color;
-    ctx.lineWidth = isActive ? (hasActive ? 2.4 : 1.4) : 1.15;
-    ctx.globalAlpha = isActive ? 1 : 0.22;
+    ctx.lineWidth = isActive ? (hasFilter ? 2.4 : 1.4) : 1.0;
+    ctx.globalAlpha = isActive ? 1 : 0.16;
     ctx.beginPath();
     let started = false, bucket = -Infinity, group = [];
     const emit = (r) => {
@@ -873,8 +923,8 @@ function draw(){
       ctx.stroke();
       ctx.setLineDash([]);
       for(const { f, c } of visible){
-        if(hasActive && f.id !== state.activeReportId) continue;
-        const isActive = !hasActive || f.id === state.activeReportId;
+        if(hasFilter && !selIds.includes(f.id)) continue;
+        const isActive = !hasFilter || selIds.includes(f.id);
         ctx.globalAlpha = isActive ? 1 : 0.22;
         const r = nearest(f, t), v = r ? val(f, c, r) : null;
         if(v !== null){
@@ -1076,14 +1126,28 @@ function updateReadouts(){
     return `<span class="jump-time" data-jump-cursor="${cursorTarget}" data-jump-t="${r.t}" data-jump-name="${esc(c.name)}" data-jump-val="${fmt(valNum)}" title="點擊將 ${cursorName} 標尺直接定位到此時間 (${dateText(r.t)})">${fmt(valNum)} <span class="jump-pin">⌖</span><small>${esc(dateText(r.t))}<br>原始列 ${r.row}</small></span>`;
   };
 
-  const hasActive = state.activeReportId !== null && state.files.some(f => f.id === state.activeReportId);
+  const selIds = state.selectedReportIds || (state.activeReportId !== null ? [state.activeReportId] : []);
+  const hasFilter = selIds.length > 0;
+  const isCmp = selIds.length === 2;
+
   $('statsBody').innerHTML = filtered.map(it => {
     const { f, c, a, b, av, bv, delta, s } = it;
-    const isOperating = hasActive && f.id === state.activeReportId;
-    const isDimmed = hasActive && f.id !== state.activeReportId;
+    const isOperating = hasFilter && selIds.includes(f.id);
+    const isDimmed = hasFilter && !selIds.includes(f.id);
+    const isFirst = selIds[0] === f.id;
+    const isSecond = selIds[1] === f.id;
+
+    let badgeHtml = '';
+    if(isCmp){
+      if(isFirst) badgeHtml = ' <span class="badge-mini" style="background:rgba(67,228,216,0.22);color:#43e4d8;">基準 A</span>';
+      else if(isSecond) badgeHtml = ' <span class="badge-mini" style="background:rgba(181,155,255,0.22);color:#b59bff;">比較 B</span>';
+    } else if(isFirst){
+      badgeHtml = ' <span class="badge-mini">操作中</span>';
+    }
+
     const rowClass = isOperating ? 'row-active' : isDimmed ? 'row-dimmed' : '';
     return `<tr class="row-clickable ${rowClass}" data-report-id="${f.id}" title="點擊切換聚焦高亮此報表曲線">
-      <td><i class="swatch" style="background:${c.color}"></i>${esc(c.name)}${isOperating ? ' <span class="badge-mini">操作中</span>' : ''} <small title="${esc(f.name)}">${esc(f.name)} · ${c.axis ? '右軸' : '左軸'} · 偏移 ${fmt(f.offset)} s</small></td>
+      <td><i class="swatch" style="background:${c.color}"></i>${esc(c.name)}${badgeHtml} <small title="${esc(f.name)}">${esc(f.name)} · ${c.axis ? '右軸' : '左軸'} · 偏移 ${fmt(f.offset)} s</small></td>
       <td>${cell(f, c, a)}</td>
       <td>${cell(f, c, b)}</td>
       <td>${delta !== null ? fmt(delta) : '—'}</td>
@@ -1180,13 +1244,13 @@ function updateHoverTip(x, y, t, cursorIdx = -1){
   const tip = $('hoverTip');
   if(!tip || !state.view) return;
   const s = selected();
-  const hasActive = state.activeReportId !== null && state.files.some(f => f.id === state.activeReportId);
-  const activeFile = hasActive ? state.files.find(f => f.id === state.activeReportId) : null;
+  const selIds = state.selectedReportIds || (state.activeReportId !== null ? [state.activeReportId] : []);
+  const isCmp = selIds.length === 2;
+  const isSingle = selIds.length === 1;
 
-  // 選擇操作中的報表時，只顯示操作中報表的資料，其他的不用顯示
   let targetSignals = s;
-  if(hasActive){
-    targetSignals = s.filter(({ f }) => f.id === state.activeReportId);
+  if(selIds.length > 0){
+    targetSignals = s.filter(({ f }) => selIds.includes(f.id));
   }
 
   let html = '';
@@ -1207,27 +1271,63 @@ function updateHoverTip(x, y, t, cursorIdx = -1){
     html += `<div style="margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #3c536a;"><strong>${esc(timeText(t))}</strong></div>`;
   }
 
-  if(hasActive && activeFile){
-    html += `<div style="font-size:10px;color:var(--cyan);margin-bottom:5px;display:flex;align-items:center;gap:4px;">
-      <span style="background:rgba(67,228,216,0.18);padding:1px 5px;border-radius:3px;font-weight:600;">操作中</span>
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px;" title="${esc(activeFile.name)}">${esc(activeFile.name)}</span>
-    </div>`;
-  }
+  if(isCmp){
+    const f1 = state.files.find(f => f.id === selIds[0]);
+    const f2 = state.files.find(f => f.id === selIds[1]);
+    const s1 = targetSignals.filter(({ f }) => f.id === selIds[0]);
+    const s2 = targetSignals.filter(({ f }) => f.id === selIds[1]);
 
-  if(targetSignals.length === 0){
-    html += `<div style="color:#8ba4b9;font-size:10px;padding:4px 0;">${hasActive ? '操作中報表未勾選任何訊號通道' : '尚未選取任何通道'}</div>`;
-  } else {
-    const displaySignals = hasActive ? targetSignals : targetSignals.slice(0, 8);
+    const renderSub = (file, sigs, badgeText, badgeColor, badgeBg) => {
+      let sub = `<div style="font-size:10px;margin:5px 0 3px;display:flex;align-items:center;gap:4px;">
+        <span style="background:${badgeBg};color:${badgeColor};padding:1px 5px;border-radius:3px;font-weight:700;font-size:9.5px;">${badgeText}</span>
+        <span style="color:#e6fbf9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px;" title="${esc(file.name)}">${esc(file.name)}</span>
+      </div>`;
+      if(sigs.length === 0){
+        sub += `<div style="color:#8ba4b9;font-size:9.5px;padding-left:6px;">未選取通道</div>`;
+      } else {
+        sub += sigs.slice(0, 6).map(({ f, c }) => {
+          const r = nearest(f, t);
+          const valStr = r ? fmt(val(f, c, r)) : '—';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0;padding-left:4px;">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:145px;"><span style="color:${c.color}">●</span> ${esc(c.name)}</span>
+            <strong style="color:#e6fbf9;font-family:var(--mono);">${valStr}</strong>
+          </div>`;
+        }).join('');
+      }
+      return sub;
+    };
+
+    if(f1) html += renderSub(f1, s1, '基準 A', '#43e4d8', 'rgba(67,228,216,0.18)');
+    html += '<div style="border-top:1px dashed #24384d;margin:5px 0 3px;"></div>';
+    if(f2) html += renderSub(f2, s2, '比較 B', '#b59bff', 'rgba(181,155,255,0.18)');
+  } else if(isSingle){
+    const f1 = state.files.find(f => f.id === selIds[0]);
+    if(f1){
+      html += `<div style="font-size:10px;color:var(--cyan);margin-bottom:5px;display:flex;align-items:center;gap:4px;">
+        <span style="background:rgba(67,228,216,0.18);padding:1px 5px;border-radius:3px;font-weight:600;">操作中</span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px;" title="${esc(f1.name)}">${esc(f1.name)}</span>
+      </div>`;
+    }
+    const displaySignals = targetSignals.slice(0, 8);
     html += displaySignals.map(({ f, c }) => {
       const r = nearest(f, t);
       const valStr = r ? fmt(val(f, c, r)) : '—';
-      const label = hasActive ? esc(c.name) : `${esc(c.name)} · #${f.id}`;
       return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:3px 0;">
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;"><span style="color:${c.color}">●</span> ${label}</span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;"><span style="color:${c.color}">●</span> ${esc(c.name)}</span>
         <strong style="color:#e6fbf9;font-family:var(--mono);">${valStr}</strong>
       </div>`;
     }).join('');
-    if(!hasActive && targetSignals.length > 8){
+  } else {
+    const displaySignals = targetSignals.slice(0, 8);
+    html += displaySignals.map(({ f, c }) => {
+      const r = nearest(f, t);
+      const valStr = r ? fmt(val(f, c, r)) : '—';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:3px 0;">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;"><span style="color:${c.color}">●</span> ${esc(c.name)} · #${f.id}</span>
+        <strong style="color:#e6fbf9;font-family:var(--mono);">${valStr}</strong>
+      </div>`;
+    }).join('');
+    if(targetSignals.length > 8){
       html += `<div style="font-size:9px;color:#8ba4b9;margin-top:4px;">其他訊號請查看下方標尺表格</div>`;
     }
   }
@@ -1237,8 +1337,8 @@ function updateHoverTip(x, y, t, cursorIdx = -1){
   tip.style.display = 'block';
   tip.style.zIndex = '999';
 
-  const tipW = tip.offsetWidth || 220;
-  const tipH = tip.offsetHeight || 120;
+  const tipW = tip.offsetWidth || 230;
+  const tipH = tip.offsetHeight || 140;
   let left = x + 16;
   if(left + tipW > W - 10){
     left = Math.max(10, x - tipW - 16);
@@ -1422,7 +1522,8 @@ $('fileList').addEventListener('click', e => {
     return;
   }
   state.files = state.files.filter(f => f.id !== +id);
-  if(state.activeReportId === +id) state.activeReportId = null;
+  state.selectedReportIds = (state.selectedReportIds || []).filter(sid => sid !== +id);
+  state.activeReportId = state.selectedReportIds[0] || null;
   rebuild();
   state.range = null;
   reset();
@@ -1463,6 +1564,7 @@ $('allChannels').onclick = () => {
 $('clearBtn').onclick = () => {
   state.files = [];
   state.activeReportId = null;
+  state.selectedReportIds = [];
   state.demo = false;
   state.range = null;
   state.cursors = [null, null];
@@ -1470,6 +1572,16 @@ $('clearBtn').onclick = () => {
   reset();
   status('資料已清空，請匯入新檔案。');
 };
+
+if($('clearSelectionBtn')){
+  $('clearSelectionBtn').onclick = () => {
+    state.selectedReportIds = [];
+    state.activeReportId = null;
+    syncReportSelection();
+    render();
+    status('已取消選取，所有報表曲線皆正常顯示。');
+  };
+}
 
 $('alignment').onchange = e => {
   state.alignment = e.target.value;

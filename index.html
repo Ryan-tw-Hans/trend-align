@@ -7,7 +7,7 @@
   <title>TrendAlign — 趨勢分析與時間對齊工作台</title>
   <link rel="stylesheet" href="style.css">
   <script src="vendor/xlsx.full.min.js" defer></script>
-  <script src="app.js?v=20261020_02" defer></script>
+  <script src="app.js?v=20261020_03" defer></script>
 </head>
 <body>
 <header class="topbar">
@@ -48,6 +48,10 @@
         </div>
         <div class="panel-body" id="panelBodyFiles">
           <button id="dropZone" class="drop-zone"><span class="upload-icon">↥</span><strong>拖曳檔案到這裡</strong><span>或點擊選取多個檔案</span><small>XLSX / XLS / CSV / TSV</small></button>
+          <div class="sidebar-compare-hint" style="font-size:10px;color:#718aa1;margin:6px 0 4px;display:flex;justify-content:space-between;align-items:center;">
+            <span>可點選<b>兩張報表進行比較</b></span>
+            <button id="clearSelectionBtn" class="text-btn" style="display:none;font-size:10px;color:var(--cyan);padding:0 2px;" title="取消選取，顯示所有報表">取消選取</button>
+          </div>
           <div id="fileList" class="file-list"></div>
           <div class="field"><label for="encoding">CSV 文字編碼</label><select id="encoding"><option value="auto">自動判斷 UTF-8 / Big5</option><option value="utf-8">UTF-8</option><option value="big5">Big5（繁體中文）</option></select></div>
         </div>
