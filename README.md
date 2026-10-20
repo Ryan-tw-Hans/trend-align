@@ -1,40 +1,42 @@
-# AGY SCOPE — 工程數據趨勢分析工作台
+# TrendAlign — 多軌報表趨勢與時間對齊工作台
 
 > **讓每一段數據，清晰可見。**  
-> 純前端、零伺服器、本機優先（Local-first）的工程波形與時間序列資料分析工具。
+> 純前端、零伺服器、本機優先（Local-first）的工程波形與多份測試報表時間對齊比對工具。
 
-[![GitHub Pages Ready](https://img.shields.io/badge/GitHub%20Pages-Ready-brightgreen.svg)](#-如何使用-github-pages-免費發布給他人使用)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20Demo-brightgreen.svg)](https://Ryan-tw-Hans.github.io/trend-align/)
 [![License: MIT / Apache 2.0 SheetJS](https://img.shields.io/badge/License-SheetJS%20CE-blue.svg)](vendor/SheetJS-LICENSE.txt)
 [![No Backend Needed](https://img.shields.io/badge/Backend-Zero%20Dependency-orange.svg)](#-資安與隱私保證)
 
+🌐 **線上使用網址**：[https://Ryan-tw-Hans.github.io/trend-align/](https://Ryan-tw-Hans.github.io/trend-align/)
+
 ---
 
-## 🌟 核心特點
+## 🌟 核心特色
 
 1. **🛡️ 100% 本機端運算（Zero Server & Zero Data Upload）**：
-   - 程式所有邏輯（Excel 解析、時間對齊、Canvas 繪圖、標尺差值計算）完全在瀏覽器記憶體中執行。
-   - **完全不會上傳任何數據到後端或第三方伺服器**，保障企業機密測試報表絕對安全。
+   * 程式所有運算（Excel 解析、時間對齊、Canvas 繪圖、標尺差值計算）完全在使用者瀏覽器記憶體中執行。
+   * **絕不上傳任何數據到伺服器**，保障企業機密測試報表絕對安全，支援離線使用。
 2. **📈 高效能 Canvas 趨勢圖繪製**：
-   - 支援百萬筆級別的時間序列數據，採用像素桶（Pixel Bucket）極值縮減演算法，完整保留突波與尖峰細節。
-   - 滾輪中心縮放、矩形框選放大、視窗平移、雙 Y 軸獨立縮放（左軸/右軸）、相對變化（Δ 模式）。
+   * 支援百萬筆級別的時間序列數據，採用像素桶（Pixel Bucket）極值縮減演算法，完整保留突波與尖峰細節。
+   * 滾輪中心縮放、矩形框選放大、視窗平移、雙 Y 軸獨立縮放（左軸/右軸）、相對變化（Δ 模式）。
 3. **⏱️ 智慧報表時間對齊（Time Alignment）**：
-   - **起始歸零（Elapsed Time）**：比較不同日期測試的進行進程。
-   - **實際時間（Absolute Time）**：精準對齊同一時刻。
-   - **特徵自動對齊**：支援依據最大值、最小值或最明顯上升沿（正斜率），一鍵將多份報表對齊。
-   - **雙標尺對齊與手動拖曳平移**：使用 A/B 標尺標記事件點後直接瞬移對齊。
+   * **起始歸零（Elapsed Time）**：比較不同日期測試的進行進程。
+   * **實際時間（Absolute Time）**：精準對齊同一時刻。
+   * **特徵自動對齊**：支援依據最大值、最小值或最明顯上升沿（正斜率），一鍵將多份報表對齊。
+   * **雙標尺對齊與手動拖曳平移**：使用 A/B 標尺標記事件點後直接瞬移對齊。
 4. **🎛️ 自由版面自訂與一鍵還原**：
-   - **獨立工具區塊收折**：左側「資料來源」、「比較設定」、「訊號通道」各區塊皆可點擊標題縮小至剩標題列，節省視野空間。
-   - **寬度與高度自由拖曳**：可拖曳側邊欄與圖表分界線調整寬度，各區塊底部與圖表、數據表下方均設有高度調整把手。
-   - **一鍵恢復預設排版**：隨時點擊「↺ 恢復預設」或「⊞ 預設版面」，即可將所有區塊尺寸與收折狀態還原。
+   * **獨立工具區塊收折**：左側「資料來源」、「比較設定」、「訊號通道」各區塊皆可點擊標題縮小至剩標題列，節省視野空間。
+   * **寬度與高度自由拖曳**：可拖曳側邊欄與圖表分界線調整寬度，各區塊底部與圖表、數據表下方均設有高度調整把手。
+   * **一鍵恢復預設排版**：隨時點擊「↺ 恢復預設」或「⊞ 預設版面」，即可將所有區塊尺寸與收折狀態還原。
 5. **📊 人性化標尺與區間分析數據表**：
-   - **欄位排序（Sorting）**：點擊任一表頭（訊號、標尺 A/B、Δ差異、最小值、最大值、平均值、有效點數）進行升降冪排序，缺值智慧置底。
-   - **欄位寬度拖曳（Resizing）**：滑鼠移至表頭邊界拖曳即可調整欄寬，雙擊恢復預設。
-   - **峰谷極值一鍵定位標尺**：點擊表格中「最小值」或「最大值」時間，標尺 A/B 自動瞬移至該極值發生時刻，精準比對異常。
-   - **資料列與圖表曲線同步聚焦**：點擊表格列即時高亮該報表曲線，其餘曲線自動淡化。
-   - **即時搜尋過濾**：輸入關鍵字即時篩選訊號通道。
+   * **欄位排序（Sorting）**：點擊任一表頭（訊號、標尺 A/B、Δ差異、最小值、最大值、平均值、有效點數）進行升降冪排序，缺值智慧置底。
+   * **欄位寬度拖曳（Resizing）**：滑鼠移至表頭邊界拖曳即可調整欄寬，雙擊恢復預設。
+   * **峰谷極值一鍵定位標尺**：點擊表格中「最小值」或「最大值」時間，標尺 A/B 自動瞬移至該極值發生時刻，精準比對異常。
+   * **資料列與圖表曲線同步聚焦**：點擊表格列即時高亮該報表曲線，其餘曲線自動淡化。
+   * **即時搜尋過濾**：輸入關鍵字即時篩選訊號通道。
 6. **📥 匯出成果**：
-   - 一鍵匯出高解析度趨勢圖 PNG（附圖例、報表資訊與偏移量）。
-   - 匯出 UTF-8 BOM CSV 區間統計報表（含標尺數值、極值時間與原始檔案列號）。
+   * 一鍵匯出高解析度趨勢圖 PNG（附圖例、報表資訊與偏移量）。
+   * 匯出 UTF-8 BOM CSV 區間統計報表（含標尺數值、極值時間與原始檔案列號）。
 
 ---
 
@@ -42,30 +44,24 @@
 
 本工具專為 GitHub Pages 設計，是純靜態網頁（Static Web App）。發布後，其他人打開網頁即可**讀取他們自己電腦上的 Excel 或 CSV 報表**進行分析，而他們的檔案絕不會外洩！
 
-### 發布步驟（3 分鐘完成）：
+### 發布步驟：
 
-1. **建立 GitHub 倉儲**：
-   - 在 GitHub 上點擊 **New repository**。
-   - 命名為 `agy-scope`（或您喜歡的名稱），設為 **Public**（若要公開供團隊使用）或 **Private**（搭配 GitHub Enterprise/Pro）。
-2. **推送本資料夾代碼至 GitHub**：
-   在 `agy-scope` 資料夾下開啟終端機（PowerShell / Git Bash）：
+1. **推送代碼至 GitHub**：
+   在 `trend-align` 資料夾下執行：
    ```bash
-   git init
    git add .
-   git commit -m "feat: initial commit of AGY SCOPE trend viewer"
-   git branch -M main
-   git remote add origin https://github.com/<您的GitHub帳號>/agy-scope.git
+   git commit -m "feat: complete TrendAlign web application"
    git push -u origin main
    ```
-3. **啟用 GitHub Pages**：
-   - 進入該倉儲的 **Settings** 頁面。
+2. **啟用 GitHub Pages**：
+   - 進入 GitHub 倉儲的 **Settings** 頁面。
    - 左側選單點選 **Pages**。
    - 在 **Build and deployment** > **Source** 選擇 `Deploy from a branch`。
    - **Branch** 選擇 `main` 分支，資料夾選擇 `/ (root)`，點擊 **Save**。
-4. **獲取網址並分享**：
-   - 約等待 30 秒至 1 分鐘，GitHub Pages 即會生成專屬網址：  
-     `https://<您的GitHub帳號>.github.io/agy-scope/`
-   - 將此網址傳給任何使用者，他們使用 Chrome、Edge 或 Safari 打開即可立即使用！
+3. **獲取網址並分享**：
+   - 約等待 30 秒至 1 分鐘，GitHub Pages 即會上線：  
+     `https://Ryan-tw-Hans.github.io/trend-align/`
+   - 將此網址傳給任何使用者，使用 Chrome、Edge 或 Safari 打開即可立即使用！
 
 ---
 

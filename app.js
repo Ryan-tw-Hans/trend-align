@@ -1095,12 +1095,12 @@ function exportImage(){
   c.scale(dpr, dpr);
   c.fillStyle = '#bcd1df';
   c.font = '12px Segoe UI';
-  c.fillText(`AGY SCOPE | ${state.alignment === 'elapsed' ? '起始歸零' : '實際時間'} | ${state.scale === 'delta' ? '相對變化' : '原始數值'} | ${timeText(state.view[0])} → ${timeText(state.view[1])}`, 20, H + 23);
+  c.fillText(`TrendAlign | ${state.alignment === 'elapsed' ? '起始歸零' : '實際時間'} | ${state.scale === 'delta' ? '相對變化' : '原始數值'} | ${timeText(state.view[0])} → ${timeText(state.view[1])}`, 20, H + 23);
   selected().forEach(({ f, c: ch }, i) => {
     c.fillStyle = ch.color;
     c.fillText(`${ch.name} · ${f.name} · ${ch.axis ? '右軸' : '左軸'} · 偏移 ${fmt(f.offset)} s`, 20, H + 48 + i * 18);
   });
-  out.toBlob(b => download(b, 'AGY-SCOPE-趨勢圖.png'));
+  out.toBlob(b => download(b, 'TrendAlign-趨勢圖.png'));
 }
 
 function exportStats(){
@@ -1116,7 +1116,7 @@ function exportStats(){
     if(typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s;
     return '"' + s.replace(/"/g, '""') + '"';
   }).join(',')).join('\r\n');
-  download(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }), 'AGY-SCOPE-區間統計.csv');
+  download(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }), 'TrendAlign-區間統計.csv');
 }
 
 function eventPoint(e){
