@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>AGY SCOPE — 趨勢分析工作台</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="vendor/xlsx.full.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="index.html" aria-label="AGY SCOPE 首頁"><span class="brand-icon">⌁</span><strong>AGY<span>SCOPE</span></strong><small>趨勢分析工作台</small></a>
+  <div class="header-actions"><span class="local-badge"><i></i> 本機處理 · 離線可用</span><button id="helpBtn" class="quiet">操作指南 <span>?</span></button></div>
+</header>
+<main>
+  <section class="intro"><div><div class="eyebrow">SIGNAL INTELLIGENCE / LOCAL WORKSPACE</div><h1>讓每一段數據，清晰可見<span>。</span></h1><p>匯入報表、對齊時間，探索訊號之間的變化。</p></div><button id="importBtn" class="primary"><b>＋</b> 匯入資料檔案</button></section>
+  <input id="fileInput" type="file" accept=".xlsx,.xls,.csv,.tsv" multiple hidden>
+  <button id="expandSidebarBtn" class="sidebar-expand-tab" title="展開左側設定區塊 (Alt+S 或 [ 鍵)" aria-label="展開左側設定區塊" hidden>
+    <span class="tab-arrow">▶</span>
+    <span class="tab-text">展開設定面板</span>
+  </button>
+  <div id="workspace" class="workspace">
+    <aside class="sidebar" id="sidebar">
+      <div id="sidebarResizer" class="sidebar-resizer" title="左右拖曳調整側邊欄寬度（雙擊恢復預設 276px）" role="separator" aria-orientation="vertical"></div>
+      <div class="sidebar-header-bar">
+        <div class="sidebar-header-info">
+          <span class="sidebar-header-tag">SIDEBAR</span>
+          <span class="sidebar-header-title">設定與控制</span>
+        </div>
+        <div class="sidebar-header-actions">
+          <button id="resetLayoutBtn" class="reset-layout-btn" title="恢復預設版面排版（包含側邊欄寬度、各工具區塊收合/展開、圖表與表格高度）" aria-label="恢復預設版面排版">
+            ↺ 恢復預設
+          </button>
+          <button id="collapseSidebarBtn" class="collapse-sidebar-btn" title="縮排/收合側邊欄，擴大右側圖表檢視空間 (Alt+S 或 [ 鍵)" aria-label="縮排側邊欄">
+            <span class="btn-arrow">◀</span> <span>收合側邊欄</span>
+          </button>
+        </div>
+      </div>
+      <section class="panel files-panel" id="panelFiles" data-panel-id="files">
+        <div class="panel-title panel-collapsible-header" data-panel="files">
+          <button class="panel-collapse-btn" type="button" aria-expanded="true" title="點擊收合或展開「資料來源」區塊">
+            <span class="panel-collapse-arrow">▾</span>
+            <h2>資料來源 <span id="fileCount" class="count">0</span></h2>
+          </button>
+          <button id="clearBtn" class="text-btn">清空</button>
+        </div>
+        <div class="panel-body" id="panelBodyFiles">
+          <button id="dropZone" class="drop-zone"><span class="upload-icon">↥</span><strong>拖曳檔案到這裡</strong><span>或點擊選取多個檔案</span><small>XLSX / XLS / CSV / TSV</small></button>
+          <div id="fileList" class="file-list"></div>
+          <div class="field"><label for="encoding">CSV 文字編碼</label><select id="encoding"><option value="auto">自動判斷 UTF-8 / Big5</option><option value="utf-8">UTF-8</option><option value="big5">Big5（繁體中文）</option></select></div>
+        </div>
+        <div class="panel-resizer-h" data-panel-target="panelBodyFiles" title="上下拖曳調整此區塊高度（雙擊恢復）"></div>
+      </section>
+      <section class="panel alignment-panel" id="panelAlignment" data-panel-id="alignment">
+        <div class="panel-title panel-collapsible-header" data-panel="alignment">
+          <button class="panel-collapse-btn" type="button" aria-expanded="true" title="點擊收合或展開「比較設定」區塊">
+            <span class="panel-collapse-arrow">▾</span>
+            <h2>比較設定</h2>
+          </button>
+          <span class="tiny-label">ALIGNMENT</span>
+        </div>
+        <div class="panel-body" id="panelBodyAlignment">
+          <div class="field"><label for="alignment">時間對齊方式</label><select id="alignment"><option value="elapsed">起始歸零 · 比較測試進程</option><option value="absolute">實際時間 · 比較同一時刻</option></select><p class="field-hint" id="alignHint">每個檔案第一筆有效時間設為 00:00。</p></div>
+          <div class="field"><label for="scaleMode">數值呈現</label><select id="scaleMode"><option value="raw">原始數值</option><option value="delta">相對變化（減去各曲線首值）</option></select></div>
+          <div class="alignment-tools"><div class="field"><label for="referenceFile">參考報表（固定不動）</label><select id="referenceFile"><option value="">請先匯入檔案</option></select></div><div class="field"><label for="movingFile">要移動的單份報表</label><select id="movingFile"><option value="">請先匯入檔案</option></select></div><button id="moveReport" class="wide-btn">↔ 拖曳這份報表</button><button id="alignCursors" class="wide-btn">將移動報表的 B 點對齊參考 A 點</button><div class="field"><label for="alignSignal">自動對齊的共同訊號</label><select id="alignSignal"><option value="">等待共同訊號</option></select></div><div class="field"><label for="alignMethod">對齊特徵</label><select id="alignMethod"><option value="max">最大值所在時間</option><option value="min">最小值所在時間</option><option value="rise">最明顯上升沿（最大正斜率）</option></select></div><button id="autoAlign" class="wide-btn highlight">⟷ 其餘報表自動對齊參考</button><p class="field-hint">以所選訊號的特徵對齊時間；請確認它在各次測試代表同一事件。偏移只改顯示時間，不修改檔案。</p><button id="resetOffsets" class="text-btn">重設所有時間偏移</button></div>
+        </div>
+        <div class="panel-resizer-h" data-panel-target="panelBodyAlignment" title="上下拖曳調整此區塊高度（雙擊恢復）"></div>
+      </section>
+      <section class="panel channels-panel" id="panelChannels" data-panel-id="channels">
+        <div class="panel-title panel-collapsible-header" data-panel="channels">
+          <button class="panel-collapse-btn" type="button" aria-expanded="true" title="點擊收合或展開「訊號通道」區塊">
+            <span class="panel-collapse-arrow">▾</span>
+            <h2>訊號通道 <span id="channelCount" class="count">0</span></h2>
+          </button>
+          <button id="allChannels" class="text-btn">全選</button>
+        </div>
+        <div class="panel-body" id="panelBodyChannels">
+          <div class="channel-hint"><span>勾選以顯示曲線</span><span>座標軸</span></div>
+          <div id="channels" class="channels"><div class="subtle-empty">匯入後即可選擇訊號</div></div>
+        </div>
+        <div class="panel-resizer-h" data-panel-target="channels" title="上下拖曳調整此區塊高度（雙擊恢復）"></div>
+      </section>
+      <div class="sidebar-note"><span>◈</span><p>資料只在此瀏覽器中處理。<br>不需帳號，也不會上傳檔案。</p></div>
+    </aside>
+    <div class="main-column">
+      <section class="metrics"><div class="metric"><span>已載入資料</span><strong id="totalRows">—</strong><small>筆有效時間紀錄</small></div><div class="metric"><span>可見訊號</span><strong id="visibleChannels">—</strong><small>條趨勢曲線</small></div><div class="metric"><span>顯示時間跨度</span><strong id="duration">—</strong><small id="rangeCaption">等待資料匯入</small></div><div class="metric accent"><span>分析範圍</span><strong id="analysisState">全部資料</strong><small id="analysisCaption">可框選區間進行統計</small></div></section>
+      <section class="panel chart-panel"><div class="chart-heading"><div><div class="eyebrow">TREND EXPLORER</div><h2>訊號趨勢 <span class="live-dot"></span></h2></div><div class="chart-actions"><button id="resetLayoutChartBtn" class="quiet-btn" title="恢復預設版面排版（包含側邊欄寬度、各工具區塊收合/展開、圖表與表格高度）">⊞ <span>預設版面</span></button><button id="toggleWideBtn" class="toggle-wide-btn" title="切換全寬檢視 (收合/展開側邊欄 Alt+S)"><span id="toggleWideIcon">◧</span> <span id="toggleWideText">全寬檢視</span></button><button id="resetBtn" title="恢復完整時間與數值範圍">↺ <span>恢復比例</span></button><button id="exportImage" title="下載目前趨勢圖 PNG">↓ <span>匯出圖表</span></button></div></div>
+        <div class="toolbar"><div id="modeButtons" class="segmented" role="group" aria-label="滑鼠拖曳模式"><button data-mode="zoom" class="active">⌕ 框選放大</button><button data-mode="pan">✥ 平移視窗</button><button data-mode="range">▥ 區間統計</button><button data-mode="shift">↔ 移動報表</button></div><label class="cursor-toggle"><input id="cursorToggle" type="checkbox" checked>雙標尺 A / B</label></div>
+        <div id="chartWrap" class="chart-wrap"><canvas id="chart" tabindex="0" aria-label="趨勢圖：滾輪縮放時間，拖曳框選，拖拉 A B 標尺查看資料。方向鍵可移動 A 標尺，按住 Shift 移動 B 標尺。"></canvas><div id="chartEmpty" class="chart-empty"><div class="empty-wave">⌁</div><h3>從一份報表開始探索</h3><p>選取本機 Excel 或 CSV，將數據轉換為可互動的趨勢。</p><button id="demoBtn">載入示範資料 <span>↗</span></button><small>示範為合成訊號，非實際測試結果</small></div><div id="hoverTip" class="hover-tip" hidden></div></div>
+        <div class="chart-foot"><span><i class="key">↕</i> 滾輪縮放時間 <i class="key">▱</i> 拖曳框選 <i class="key">⋮</i> 右鍵功能選單</span><span id="viewRange">尚未載入資料</span></div>
+        <div id="chartResizer" class="resizer-row" title="上下拖曳調整趨勢圖高度（雙擊恢復預設 430px）" role="separator" aria-orientation="horizontal"></div>
+        <div id="rangeBar" class="range-bar" hidden><span id="rangeText"></span><button id="clearRange" class="text-btn">清除選取 ×</button></div>
+      </section>
+      <section class="panel analysis-panel"><div class="analysis-heading"><div class="analysis-title-group"><div class="eyebrow">PRECISION READOUT</div><h2>標尺與區間分析 <span id="tableFilterCount" class="count-badge" hidden></span></h2></div><div class="table-actions"><div class="table-search-wrap"><span class="search-icon">🔍</span><input id="tableSearchInput" type="text" placeholder="搜尋訊號 / 報表..." aria-label="搜尋訊號或報表"><button id="clearSearchBtn" class="clear-search-btn" title="清除搜尋" hidden>×</button></div><button id="resetSortBtn" class="quiet-btn" title="重設表格排序與欄位寬度">↺ <span>重設欄位</span></button><button id="exportStats">↓ <span>匯出統計 CSV</span></button></div></div><div class="readouts"><div><span class="ruler-label a">A</span><span id="cursorATime">—</span></div><div><span class="ruler-label b">B</span><span id="cursorBTime">—</span></div><div class="delta-time">Δt <strong id="cursorDelta">—</strong></div></div><div class="table-toolbar-hint"><span>💡 <strong>操作提示：</strong>點擊表頭可<b>排序欄位</b>；拖曳表頭右邊界可<b>自訂欄寬</b>；點擊資料列可<b>同步聚焦圖表曲線</b>；點擊極值時間可將<b>標尺定位至峰谷點</b>。</span><span id="sortIndicatorBadge" class="sort-badge" hidden></span></div><div id="tableScroll" class="table-scroll"><table id="statsTable"><colgroup><col class="col-0" style="width:230px;"><col class="col-1" style="width:130px;"><col class="col-2" style="width:130px;"><col class="col-3" style="width:110px;"><col class="col-4" style="width:155px;"><col class="col-5" style="width:155px;"><col class="col-6" style="width:110px;"><col class="col-7" style="width:95px;"></colgroup><thead><tr><th data-col-index="0" data-col="signal" class="sortable" title="點擊依「訊號/來源」排序"><div class="th-content"><span>訊號 / 來源</span><span class="sort-icon">⇅</span></div><div class="col-resizer" title="左右拖曳調整欄寬（雙擊恢復）"></div></th><th data-col-index="1" data-col="cursorA" class="sortable" title="點擊依「標尺 A」數值排序"><div class="th-content"><span>標尺 A</span><span class="sort-icon">⇅</span></div><div class="col-resizer" title="左右拖曳調整欄寬（雙擊恢復）"></div></th><th data-col-index="2" data-col="cursorB" class="sortable" title="點擊依「標尺 B」數值排序"><div class="th-content"><span>標尺 B</span><span class="sort-icon">⇅</span></div><div class="col-resizer" title="左右拖曳調整欄寬（雙擊恢復）"></div></th><th data-col-index="3" data-col="delta" class="sortable" title="點擊依「Δ B − A」差異排序"><div class="th-content"><span>Δ B − A</span><span class="sort-icon">⇅</span></div><div class="col-resizer" title="左右拖曳調整欄寬（雙擊恢復）"></div></th><th data-col-index="4" data-col="min" class="sortable" title="點擊依「最小值」排序"><div class="th-content"><span>最小值 / 時間</span><span class="sort-icon">⇅</span></div><div class="col-resizer" title="左右拖曳調整欄寬（雙擊恢復）"></div></th><th data-col-index="5" data-col="max" class="sortable" title="點擊依「最大值」排序"><div class="th-content"><span>最大值 / 時間</span><span class="sort-icon">⇅</span></div><div class="col-resizer" title="左右拖曳調整欄寬（雙擊恢復）"></div></th><th data-col-index="6" data-col="mean" class="sortable" title="點擊依「平均值」排序"><div class="th-content"><span>平均值</span><span class="sort-icon">⇅</span></div><div class="col-resizer" title="左右拖曳調整欄寬（雙擊恢復）"></div></th><th data-col-index="7" data-col="n" class="sortable" title="點擊依「有效點數」排序"><div class="th-content"><span>有效點數</span><span class="sort-icon">⇅</span></div><div class="col-resizer" title="左右拖曳調整欄寬（雙擊恢復）"></div></th></tr></thead><tbody id="statsBody"><tr><td colspan="8" class="table-empty">匯入資料後，拖曳圖上標尺查看對應資料與原始列號。</td></tr></tbody></table></div><div id="tableResizer" class="resizer-row" title="上下拖曳調整數據表高度（雙擊恢復預設 400px）" role="separator" aria-orientation="horizontal"></div><div class="table-note">統計使用選定區間內全部原始有效值；未選區間時使用全部資料。標尺取最近時間的原始紀錄，不做內插。</div></section>
+      <div id="status" class="status" role="status" aria-live="polite">● 工作台已就緒，請匯入本機資料。</div>
+    </div>
+  </div>
+</main>
+<footer><span>AGY SCOPE <b>/</b> 工程數據工作台</span><span>LOCAL FIRST. SIGNAL FOCUSED.</span></footer>
+<div id="contextMenu" class="context-menu" hidden role="menu"><button data-action="reset" role="menuitem">↺ 恢復原比例</button><button data-action="fitY" role="menuitem">↕ 數值軸適合目前視窗</button><button data-action="range" role="menuitem">▥ 統計目前可見時間區間</button><button data-action="clear" role="menuitem">× 清除統計區間</button><button data-action="resetLayout" role="menuitem">⊞ 恢復預設版面排版</button><button data-action="image" role="menuitem">↓ 匯出目前圖表</button></div>
+<dialog id="helpDialog"><div class="dialog-head"><h2>操作指南</h2><button id="closeHelp" aria-label="關閉操作指南">×</button></div><div class="help-content"><h3>01 / 匯入與比較</h3><p>可多選或拖曳 Excel／CSV／TSV。第一列為欄名，第一欄為時間，其餘欄位為數值。Excel 的每個非空工作表都會分別載入。CSV 支援引號、逗號、分號及 Tab，自動判斷 UTF-8／Big5，也可先指定編碼再匯入。</p><p>時間支援 Excel 日期、YYYY-MM-DD HH:mm:ss.SSS、ISO 時間、HH:mm:ss.SSS、Unix 秒／毫秒。僅有時間時自動處理跨午夜。沒有時區的日期按本機時間解讀。無效時間列會略過，空值及非數值會形成斷線，不補成 0。</p><p>起始歸零可比較不同日期的測試；實際時間可比較同步紀錄。可直接點選左側資料來源卡片或下方資料表列，該報表會亮起青色外框並顯示「操作中」，趨勢圖亦會同步高亮該報表的曲線（亮度與清晰度不變，其餘報表曲線自動淡化變黯淡），方便快速辨識；再次點選卡片即可取消聚焦。在「移動報表」模式下左右拖曳即可調整時間偏移。若選到原參考報表，參考來源會切換到另一份。每個來源也可手動設定時間偏移（秒，正值向右移），也可切換各曲線的左／右數值軸。相對變化模式會扣除每條曲線第一個有效值。</p><h3>02 / 版面與區塊調整</h3><p>• <strong>獨立工具區塊收合：</strong>左側每一個設定區塊（資料來源、比較設定、訊號通道）皆可點擊標題直接縮小收合，僅保留標題列，點擊即可隨時展開。<br>• <strong>區塊寬度與高度調整：</strong>可左右拖曳側邊欄與圖表之間的分割線調整側邊欄寬度；各區塊底部的拖曳把手可自由調整區塊高度；趨勢圖下方與數據資料表下方亦設有拖曳線可自由調整視圖高度。<br>• <strong>恢復預設版面：</strong>隨時點擊側邊欄頂部的「↺ 恢復預設」或圖表右上角的「⊞ 預設版面」，即可立即將所有區塊尺寸、高度、欄寬與收合狀態還原至標準排版。</p><h3>03 / 數據資料表進階操作</h3><p>• <strong>欄位排序：</strong>點擊資料表任一表頭（訊號、標尺 A/B、Δ差異、最小值、最大值、平均值、有效點數）即可進行升冪/降冪排序；點擊「↺ 重設欄位」即可還原預設次序。<br>• <strong>欄位寬度調整：</strong>滑鼠移至表頭右邊界按住拖曳，即可自訂欄寬；雙擊分界線可恢復預設欄寬。<br>• <strong>峰谷極值快速定位：</strong>點擊表格中「最小值」或「最大值」時間，系統將自動把標尺直接定位到該極值發生的時間點，方便工程師快速在趨勢圖上交叉比對突波與異常。</p><h3>04 / 趨勢操作與本機使用</h3><p>在圖中滾動滑鼠滾輪縮放時間軸。選「框選放大」後拖曳矩形可同時放大時間及數值。選「平移」拖曳時間軸；按住 Shift 拖曳也可暫時平移。雙擊或右鍵「恢復原比例」返回全覽。直接開啟 index.html 或「開啟趨勢分析.cmd」，不需連網，不需安裝，資料只保留於瀏覽器分頁記憶體中。</p></div></dialog>
+</body>
+</html>
