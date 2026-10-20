@@ -863,9 +863,10 @@ function draw(){
   if($('cursorToggle').checked){
     state.cursors.forEach((t, i) => {
       const x = px(t);
+      const isDraggingThis = state.drag && state.drag.type === 'cursor' && state.drag.index === i;
       ctx.strokeStyle = i ? '#b59bff' : '#43e4d8';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = isDraggingThis ? 1.5 : 1;
+      ctx.setLineDash(isDraggingThis ? [4, 2] : [5, 4]);
       ctx.beginPath();
       ctx.moveTo(x, plot.t);
       ctx.lineTo(x, plot.b);
@@ -877,10 +878,27 @@ function draw(){
         ctx.globalAlpha = isActive ? 1 : 0.22;
         const r = nearest(f, t), v = r ? val(f, c, r) : null;
         if(v !== null){
+          const dotX = px(xt(f, r)), dotY = py(v, c.axis);
           ctx.beginPath();
-          ctx.arc(px(xt(f, r)), py(v, c.axis), isActive ? 3.2 : 2, 0, Math.PI * 2);
+          ctx.arc(dotX, dotY, isDraggingThis ? 4.5 : (isActive ? 3.2 : 2), 0, Math.PI * 2);
           ctx.fillStyle = c.color;
           ctx.fill();
+
+          if(isDraggingThis){
+            const text = fmt(v);
+            ctx.font = 'bold 9.5px Consolas, monospace';
+            const tw = ctx.measureText(text).width;
+            const tagX = (dotX + 6 + tw + 8 > plot.r) ? dotX - tw - 12 : dotX + 6;
+            ctx.fillStyle = '#0a1420f0';
+            ctx.strokeStyle = c.color;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(tagX, dotY - 9, tw + 8, 16, 3);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#e6fbf9';
+            ctx.fillText(text, tagX + 4, dotY + 3);
+          }
         }
       }
       ctx.globalAlpha = 1;
@@ -911,6 +929,7 @@ function draw(){
     state.cursors.forEach((t, i) => {
       const x = px(t);
       if(x < plot.l || x > plot.r) return;
+      const isDraggingThis = state.drag && state.drag.type === 'cursor' && state.drag.index === i;
       ctx.fillStyle = i ? '#b59bff' : '#43e4d8';
       ctx.beginPath();
       ctx.roundRect(x - 11, plot.t - 20, 22, 18, 3);
@@ -919,6 +938,11 @@ function draw(){
       ctx.textAlign = 'center';
       ctx.font = 'bold 11px Consolas';
       ctx.fillText(i ? 'B' : 'A', x, plot.t - 7);
+      if(isDraggingThis){
+        ctx.fillStyle = i ? '#b59bff' : '#43e4d8';
+        ctx.font = 'bold 10px Consolas';
+        ctx.fillText(timeText(t), x, plot.t - 24);
+      }
       ctx.font = '10px Consolas';
     });
   }
@@ -1136,6 +1160,22 @@ canvas.addEventListener('wheel', e => {
   render();
 }, { passive: false });
 
+function hideHoverTip(){
+  const tip = $('hoverTip');
+  if(tip){
+    tip.hidden = true;
+    tip.style.display = 'none';
+  }
+}
+
+const isCursorHit = (t, x, y) => {
+  if(t === null || t === undefined) return false;
+  const cx = px(t);
+  const nearLine = Math.abs(cx - x) <= 18;
+  const nearBadge = Math.abs(cx - x) <= 16 && y <= plot.t + 6;
+  return nearLine || nearBadge;
+};
+
 function updateHoverTip(x, y, t, cursorIdx = -1){
   const tip = $('hoverTip');
   if(!tip || !state.view) return;
@@ -1194,6 +1234,8 @@ function updateHoverTip(x, y, t, cursorIdx = -1){
 
   tip.innerHTML = html;
   tip.hidden = false;
+  tip.style.display = 'block';
+  tip.style.zIndex = '999';
 
   const tipW = tip.offsetWidth || 220;
   const tipH = tip.offsetHeight || 120;
@@ -1215,13 +1257,13 @@ canvas.addEventListener('pointerdown', e => {
   const x = clampX(p.x), y = Math.max(plot.t, Math.min(plot.b, p.y));
   let type = e.shiftKey ? 'pan' : state.mode, index = -1;
   if($('cursorToggle').checked){
-    index = state.cursors.findIndex(t => Math.abs(px(t) - x) < 10);
+    index = state.cursors.findIndex(t => isCursorHit(t, x, p.y));
     if(index >= 0) type = 'cursor';
   }
   if(type === 'cursor'){
     updateHoverTip(px(state.cursors[index]), y, state.cursors[index], index);
   } else {
-    $('hoverTip').hidden = true;
+    hideHoverTip();
   }
   const f = state.files.find(f => f.id === +$('movingFile').value);
   if(type === 'shift' && !f) return status('請選擇要移動的報表。', true);
@@ -1242,7 +1284,7 @@ canvas.addEventListener('pointermove', e => {
       state.cursors[d.index] = curT;
       updateHoverTip(x, y, curT, d.index);
     } else {
-      $('hoverTip').hidden = true;
+      hideHoverTip();
       if(d.type === 'pan'){
         const dt = (x - d.sx) / plot.w * (d.view[1] - d.view[0]);
         state.view = d.view.map(t => t - dt);
@@ -1258,7 +1300,7 @@ canvas.addEventListener('pointermove', e => {
     return;
   }
   if(!inside(p)){
-    $('hoverTip').hidden = true;
+    hideHoverTip();
     state.hover = null;
     render();
     return;
@@ -1266,7 +1308,7 @@ canvas.addEventListener('pointermove', e => {
   state.hover = x;
   let cursorHitIdx = -1;
   if($('cursorToggle').checked){
-    cursorHitIdx = state.cursors.findIndex(t => Math.abs(px(t) - x) < 10);
+    cursorHitIdx = state.cursors.findIndex(t => isCursorHit(t, x, p.y));
   }
   const cursorHit = cursorHitIdx >= 0;
   canvas.style.cursor = cursorHit ? 'ew-resize' : state.mode === 'pan' ? 'grab' : state.mode === 'shift' ? 'ew-resize' : 'crosshair';
