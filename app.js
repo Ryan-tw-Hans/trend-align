@@ -872,6 +872,7 @@ function draw(){
       ctx.stroke();
       ctx.setLineDash([]);
       for(const { f, c } of visible){
+        if(hasActive && f.id !== state.activeReportId) continue;
         const isActive = !hasActive || f.id === state.activeReportId;
         ctx.globalAlpha = isActive ? 1 : 0.22;
         const r = nearest(f, t), v = r ? val(f, c, r) : null;
@@ -1135,18 +1136,92 @@ canvas.addEventListener('wheel', e => {
   render();
 }, { passive: false });
 
+function updateHoverTip(x, y, t, cursorIdx = -1){
+  const tip = $('hoverTip');
+  if(!tip || !state.view) return;
+  const s = selected();
+  const hasActive = state.activeReportId !== null && state.files.some(f => f.id === state.activeReportId);
+  const activeFile = hasActive ? state.files.find(f => f.id === state.activeReportId) : null;
+
+  // 選擇操作中的報表時，只顯示操作中報表的資料，其他的不用顯示
+  let targetSignals = s;
+  if(hasActive){
+    targetSignals = s.filter(({ f }) => f.id === state.activeReportId);
+  }
+
+  let html = '';
+  if(cursorIdx >= 0){
+    const cursorName = cursorIdx === 0 ? 'A' : 'B';
+    const cursorColor = cursorIdx === 0 ? '#43e4d8' : '#b59bff';
+    const otherTime = state.cursors[cursorIdx === 0 ? 1 : 0];
+    const isBoth = state.cursors[0] !== null && state.cursors[1] !== null;
+    const deltaText = isBoth
+      ? `<span style="color:#8ba4b9;font-size:9.5px;margin-left:auto;">Δt: ${elapsed(Math.abs(state.cursors[1] - state.cursors[0]), true)}</span>`
+      : '';
+    html += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid #3c536a;">
+      <span style="background:${cursorColor};color:#0b1520;font-weight:700;padding:1px 6px;border-radius:3px;font-size:10px;">標尺 ${cursorName}</span>
+      <strong>${esc(timeText(t))}</strong>
+      ${deltaText}
+    </div>`;
+  } else {
+    html += `<div style="margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #3c536a;"><strong>${esc(timeText(t))}</strong></div>`;
+  }
+
+  if(hasActive && activeFile){
+    html += `<div style="font-size:10px;color:var(--cyan);margin-bottom:5px;display:flex;align-items:center;gap:4px;">
+      <span style="background:rgba(67,228,216,0.18);padding:1px 5px;border-radius:3px;font-weight:600;">操作中</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px;" title="${esc(activeFile.name)}">${esc(activeFile.name)}</span>
+    </div>`;
+  }
+
+  if(targetSignals.length === 0){
+    html += `<div style="color:#8ba4b9;font-size:10px;padding:4px 0;">${hasActive ? '操作中報表未勾選任何訊號通道' : '尚未選取任何通道'}</div>`;
+  } else {
+    const displaySignals = hasActive ? targetSignals : targetSignals.slice(0, 8);
+    html += displaySignals.map(({ f, c }) => {
+      const r = nearest(f, t);
+      const valStr = r ? fmt(val(f, c, r)) : '—';
+      const label = hasActive ? esc(c.name) : `${esc(c.name)} · #${f.id}`;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:3px 0;">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;"><span style="color:${c.color}">●</span> ${label}</span>
+        <strong style="color:#e6fbf9;font-family:var(--mono);">${valStr}</strong>
+      </div>`;
+    }).join('');
+    if(!hasActive && targetSignals.length > 8){
+      html += `<div style="font-size:9px;color:#8ba4b9;margin-top:4px;">其他訊號請查看下方標尺表格</div>`;
+    }
+  }
+
+  tip.innerHTML = html;
+  tip.hidden = false;
+
+  const tipW = tip.offsetWidth || 220;
+  const tipH = tip.offsetHeight || 120;
+  let left = x + 16;
+  if(left + tipW > W - 10){
+    left = Math.max(10, x - tipW - 16);
+  }
+  let top = Math.max(plot.t, Math.min(y - 20, H - tipH - 10));
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+}
+
 canvas.addEventListener('pointerdown', e => {
   if(e.button !== 0 || !state.view) return;
   const p = eventPoint(e);
   if(!inside(p)) return;
   $('contextMenu').hidden = true;
-  $('hoverTip').hidden = true;
   canvas.focus();
   const x = clampX(p.x), y = Math.max(plot.t, Math.min(plot.b, p.y));
   let type = e.shiftKey ? 'pan' : state.mode, index = -1;
   if($('cursorToggle').checked){
     index = state.cursors.findIndex(t => Math.abs(px(t) - x) < 10);
     if(index >= 0) type = 'cursor';
+  }
+  if(type === 'cursor'){
+    updateHoverTip(px(state.cursors[index]), y, state.cursors[index], index);
+  } else {
+    $('hoverTip').hidden = true;
   }
   const f = state.files.find(f => f.id === +$('movingFile').value);
   if(type === 'shift' && !f) return status('請選擇要移動的報表。', true);
@@ -1162,16 +1237,22 @@ canvas.addEventListener('pointermove', e => {
   if(d){
     d.x = x;
     d.y = y;
-    if(d.type === 'cursor') state.cursors[d.index] = tx(x);
-    else if(d.type === 'pan'){
-      const dt = (x - d.sx) / plot.w * (d.view[1] - d.view[0]);
-      state.view = d.view.map(t => t - dt);
-    } else if(d.type === 'shift'){
-      d.file.offset = d.offset + (x - d.sx) / plot.w * (d.view[1] - d.view[0]) / 1000;
-      const inp = document.querySelector(`[data-offset="${d.file.id}"]`);
-      if(inp) inp.value = Math.round(d.file.offset * 1000) / 1000;
-      state.statsDirty = true;
-      state.full = bounds();
+    if(d.type === 'cursor'){
+      const curT = tx(x);
+      state.cursors[d.index] = curT;
+      updateHoverTip(x, y, curT, d.index);
+    } else {
+      $('hoverTip').hidden = true;
+      if(d.type === 'pan'){
+        const dt = (x - d.sx) / plot.w * (d.view[1] - d.view[0]);
+        state.view = d.view.map(t => t - dt);
+      } else if(d.type === 'shift'){
+        d.file.offset = d.offset + (x - d.sx) / plot.w * (d.view[1] - d.view[0]) / 1000;
+        const inp = document.querySelector(`[data-offset="${d.file.id}"]`);
+        if(inp) inp.value = Math.round(d.file.offset * 1000) / 1000;
+        state.statsDirty = true;
+        state.full = bounds();
+      }
     }
     render();
     return;
@@ -1183,26 +1264,28 @@ canvas.addEventListener('pointermove', e => {
     return;
   }
   state.hover = x;
-  const cursorHit = $('cursorToggle').checked && state.cursors.some(t => Math.abs(px(t) - x) < 10);
+  let cursorHitIdx = -1;
+  if($('cursorToggle').checked){
+    cursorHitIdx = state.cursors.findIndex(t => Math.abs(px(t) - x) < 10);
+  }
+  const cursorHit = cursorHitIdx >= 0;
   canvas.style.cursor = cursorHit ? 'ew-resize' : state.mode === 'pan' ? 'grab' : state.mode === 'shift' ? 'ew-resize' : 'crosshair';
-  const t = tx(x), s = selected();
-  const hasActive = state.activeReportId !== null && state.files.some(f => f.id === state.activeReportId);
-  $('hoverTip').innerHTML = `<strong>${esc(timeText(t))}</strong>${s.slice(0, 8).map(({ f, c }) => {
-    const r = nearest(f, t);
-    const isOperating = hasActive && f.id === state.activeReportId;
-    const isDimmed = hasActive && f.id !== state.activeReportId;
-    const style = isOperating ? 'font-weight:700;color:#e6fbf9;' : isDimmed ? 'opacity:0.4;' : '';
-    return `<div style="${style}"><span style="color:${c.color}">●</span> ${esc(c.name)} · #${f.id}　${r ? fmt(val(f, c, r)) : '—'}${isOperating ? ' <span style="color:var(--cyan);font-size:9px;">[操作中]</span>' : ''}</div>`;
-  }).join('')}${s.length > 8 ? '<div>其他訊號請查看下方標尺表格</div>' : ''}`;
-  $('hoverTip').hidden = false;
-  $('hoverTip').style.left = Math.max(5, Math.min(x + 14, W - $('hoverTip').offsetWidth - 8)) + 'px';
-  $('hoverTip').style.top = Math.max(5, Math.min(y + 14, H - $('hoverTip').offsetHeight - 8)) + 'px';
+
+  if(cursorHit){
+    const cT = state.cursors[cursorHitIdx];
+    updateHoverTip(px(cT), y, cT, cursorHitIdx);
+  } else {
+    updateHoverTip(x, y, tx(x), -1);
+  }
   render();
 });
 
 function endDrag(e, cancel = false){
   const d = state.drag;
   if(!d) return;
+  const wasCursor = d.type === 'cursor';
+  const cursorIdx = d.index;
+  const lastY = d.y;
   if(cancel){
     if(d.type === 'shift'){ d.file.offset = d.offset; rebuild(); state.statsDirty = true; }
     state.view = d.view;
@@ -1224,6 +1307,10 @@ function endDrag(e, cancel = false){
   state.drag = null;
   state.full = bounds();
   if(canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+  if(wasCursor && cursorIdx >= 0 && $('cursorToggle').checked){
+    const cT = state.cursors[cursorIdx];
+    updateHoverTip(px(cT), lastY, cT, cursorIdx);
+  }
   render();
 }
 
@@ -1246,6 +1333,9 @@ canvas.addEventListener('keydown', e => {
   }
   n = Math.min(f.rows.length - 1, Math.max(0, n));
   state.cursors[i] = xt(f, f.rows[n]);
+  if($('cursorToggle').checked){
+    updateHoverTip(px(state.cursors[i]), plot.t + 30, state.cursors[i], i);
+  }
   render();
 });
 
