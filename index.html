@@ -7,7 +7,7 @@
   <title>TrendAlign — 趨勢分析與時間對齊工作台</title>
   <link rel="stylesheet" href="style.css">
   <script src="vendor/xlsx.full.min.js" defer></script>
-  <script src="app.js?v=20261020_03" defer></script>
+  <script src="app.js?v=20261020_04" defer></script>
 </head>
 <body>
 <header class="topbar">
@@ -48,9 +48,13 @@
         </div>
         <div class="panel-body" id="panelBodyFiles">
           <button id="dropZone" class="drop-zone"><span class="upload-icon">↥</span><strong>拖曳檔案到這裡</strong><span>或點擊選取多個檔案</span><small>XLSX / XLS / CSV / TSV</small></button>
-          <div class="sidebar-compare-hint" style="font-size:10px;color:#718aa1;margin:6px 0 4px;display:flex;justify-content:space-between;align-items:center;">
-            <span>可點選<b>兩張報表進行比較</b></span>
-            <button id="clearSelectionBtn" class="text-btn" style="display:none;font-size:10px;color:var(--cyan);padding:0 2px;" title="取消選取，顯示所有報表">取消選取</button>
+          <div class="file-list-toolbar">
+            <span>勾選以顯示/比較</span>
+            <div class="file-list-actions">
+              <button id="checkAllReportsBtn" class="text-btn" type="button" title="全部勾選報表 (滑鼠右鍵亦可操作)">全選</button>
+              <span class="sep">|</span>
+              <button id="uncheckAllReportsBtn" class="text-btn" type="button" title="全部取消勾選 (滑鼠右鍵亦可操作)">全取消</button>
+            </div>
           </div>
           <div id="fileList" class="file-list"></div>
           <div class="field"><label for="encoding">CSV 文字編碼</label><select id="encoding"><option value="auto">自動判斷 UTF-8 / Big5</option><option value="utf-8">UTF-8</option><option value="big5">Big5（繁體中文）</option></select></div>
@@ -103,7 +107,7 @@
   </div>
 </main>
 <footer><span>TrendAlign <b>/</b> 工程數據工作台</span><span>LOCAL FIRST. SIGNAL FOCUSED.</span></footer>
-<div id="contextMenu" class="context-menu" hidden role="menu"><button data-action="reset" role="menuitem">↺ 恢復原比例</button><button data-action="fitY" role="menuitem">↕ 數值軸適合目前視窗</button><button data-action="range" role="menuitem">▥ 統計目前可見時間區間</button><button data-action="clear" role="menuitem">× 清除統計區間</button><button data-action="resetLayout" role="menuitem">⊞ 恢復預設版面排版</button><button data-action="image" role="menuitem">↓ 匯出目前圖表</button></div>
+<div id="contextMenu" class="context-menu" hidden role="menu"><div class="menu-group-label">報表勾選與比較</div><button data-action="checkAllReports" role="menuitem">☑ 全部勾選報表 (顯示全部)</button><button data-action="uncheckAllReports" role="menuitem">☐ 全部取消勾選 (全部隱藏)</button><div class="menu-divider"></div><div class="menu-group-label">圖表視圖控制</div><button data-action="reset" role="menuitem">↺ 恢復原比例</button><button data-action="fitY" role="menuitem">↕ 數值軸適合目前視窗</button><button data-action="range" role="menuitem">▥ 統計目前可見時間區間</button><button data-action="clear" role="menuitem">× 清除統計區間</button><button data-action="resetLayout" role="menuitem">⊞ 恢復預設版面排版</button><button data-action="image" role="menuitem">↓ 匯出目前圖表</button></div>
 <dialog id="helpDialog"><div class="dialog-head"><h2>操作指南</h2><button id="closeHelp" aria-label="關閉操作指南">×</button></div><div class="help-content"><h3>01 / 匯入與比較</h3><p>可多選或拖曳 Excel／CSV／TSV。第一列為欄名，第一欄為時間，其餘欄位為數值。Excel 的每個非空工作表都會分別載入。CSV 支援引號、逗號、分號及 Tab，自動判斷 UTF-8／Big5，也可先指定編碼再匯入。</p><p>時間支援 Excel 日期、YYYY-MM-DD HH:mm:ss.SSS、ISO 時間、HH:mm:ss.SSS、Unix 秒／毫秒。僅有時間時自動處理跨午夜。沒有時區的日期按本機時間解讀。無效時間列會略過，空值及非數值會形成斷線，不補成 0。</p><p>起始歸零可比較不同日期的測試；實際時間可比較同步紀錄。可直接點選左側資料來源卡片或下方資料表列，該報表會亮起青色外框並顯示「操作中」，趨勢圖亦會同步高亮該報表的曲線（亮度與清晰度不變，其餘報表曲線自動淡化變黯淡），方便快速辨識；再次點選卡片即可取消聚焦。在「移動報表」模式下左右拖曳即可調整時間偏移。若選到原參考報表，參考來源會切換到另一份。每個來源也可手動設定時間偏移（秒，正值向右移），也可切換各曲線的左／右數值軸。相對變化模式會扣除每條曲線第一個有效值。</p><h3>02 / 版面與區塊調整</h3><p>• <strong>獨立工具區塊收合：</strong>左側每一個設定區塊（資料來源、比較設定、訊號通道）皆可點擊標題直接縮小收合，僅保留標題列，點擊即可隨時展開。<br>• <strong>區塊寬度與高度調整：</strong>可左右拖曳側邊欄與圖表之間的分割線調整側邊欄寬度；各區塊底部的拖曳把手可自由調整區塊高度；趨勢圖下方與數據資料表下方亦設有拖曳線可自由調整視圖高度。<br>• <strong>恢復預設版面：</strong>隨時點擊側邊欄頂部的「↺ 恢復預設」或圖表右上角的「⊞ 預設版面」，即可立即將所有區塊尺寸、高度、欄寬與收合狀態還原至標準排版。</p><h3>03 / 數據資料表進階操作</h3><p>• <strong>欄位排序：</strong>點擊資料表任一表頭（訊號、標尺 A/B、Δ差異、最小值、最大值、平均值、有效點數）即可進行升冪/降冪排序；點擊「↺ 重設欄位」即可還原預設次序。<br>• <strong>欄位寬度調整：</strong>滑鼠移至表頭右邊界按住拖曳，即可自訂欄寬；雙擊分界線可恢復預設欄寬。<br>• <strong>峰谷極值快速定位：</strong>點擊表格中「最小值」或「最大值」時間，系統將自動把標尺直接定位到該極值發生的時間點，方便工程師快速在趨勢圖上交叉比對突波與異常。</p><h3>04 / 趨勢操作與本機使用</h3><p>在圖中滾動滑鼠滾輪縮放時間軸。選「框選放大」後拖曳矩形可同時放大時間及數值。選「平移」拖曳時間軸；按住 Shift 拖曳也可暫時平移。雙擊或右鍵「恢復原比例」返回全覽。直接開啟 index.html 或「開啟趨勢分析.cmd」，不需連網，不需安裝，資料只保留於瀏覽器分頁記憶體中。</p></div></dialog>
 </body>
 </html>

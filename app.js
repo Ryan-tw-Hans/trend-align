@@ -23,7 +23,6 @@ const state = {
   tableFilter: '',
   files: [],
   activeReportId: null,
-  selectedReportIds: [],
   mode: 'zoom',
   alignment: 'elapsed',
   scale: 'raw',
@@ -59,7 +58,7 @@ function elapsed(t, ms = false){
 }
 const timeText = t => state.alignment === 'elapsed' ? elapsed(t, true) : dateText(t);
 const status = (s, error = false) => { $('status').textContent = s; $('status').classList.toggle('error', error); };
-const selected = () => state.files.flatMap(f => f.channels.filter(c => c.visible).map(c => ({ f, c })));
+const selected = () => state.files.filter(f => f.visible !== false).flatMap(f => f.channels.filter(c => c.visible).map(c => ({ f, c })));
 const origin = f => state.alignment === 'elapsed' ? f.rows[0].t : 0;
 const xt = (f, r) => r.t - origin(f) + f.offset * 1000;
 const val = (f, c, r) => r.v[c.index] === null ? null : r.v[c.index] - (state.scale === 'delta' ? c.base : 0);
@@ -84,7 +83,10 @@ function nearest(f, t){
 
 function bounds(){
   let a = Infinity, b = -Infinity;
-  for(const f of state.files){
+  const visFiles = state.files.filter(f => f.visible !== false);
+  const targetFiles = visFiles.length ? visFiles : state.files;
+  for(const f of targetFiles){
+    if(!f.rows || !f.rows.length) continue;
     a = Math.min(a, xt(f, f.rows[0]));
     b = Math.max(b, xt(f, f.rows.at(-1)));
   }
@@ -202,7 +204,7 @@ function makeDataset(matrix, name, date1904 = false){
     return { name, index, base: base ?? 0, visible: base !== undefined, color: palette[((id - 1) * 3 + index) % palette.length], axis: /速度|speed|rpm/i.test(name) ? 1 : 0 };
   });
   if(channels.every(c => !c.visible)) throw Error('時間有效，但其餘欄位皆無有效數值');
-  return { id, name, rows, channels, offset: 0, skipped, blank };
+  return { id, name, rows, channels, offset: 0, skipped, blank, visible: true };
 }
 
 async function importFiles(input){
@@ -258,8 +260,41 @@ async function importFiles(input){
 }
 
 function rebuild(){
-  $('fileList').innerHTML = state.files.map(f => `<div class="file-card" data-report="${f.id}"><div class="file-top"><button class="file-select" data-select-report="${f.id}" aria-pressed="false" aria-label="操作報表 ${esc(f.name)}"><span class="swatch" style="background:${f.channels[0].color}"></span><span class="file-name" title="${esc(f.name)}">${esc(f.name)}</span><span class="selected-badge">操作中</span></button><button class="remove" data-remove="${f.id}" aria-label="移除 ${esc(f.name)}">×</button></div><div class="file-meta">${f.rows.length.toLocaleString()} 筆 · ${f.channels.length} 通道${f.skipped ? ' · ' + f.skipped + ' 列略過' : ''}</div><label class="offset-field">時間偏移 <input type="number" step="0.1" data-offset="${f.id}" value="${f.offset}" aria-label="${esc(f.name)} 時間偏移秒數"> 秒</label></div>`).join('');
-  $('channels').innerHTML = state.files.map(f => `<div class="channel-group-name" data-group-report="${f.id}" title="${esc(f.name)}">${esc(f.name)}</div>${f.channels.map(c => `<div class="channel-row"><label><input type="checkbox" data-channel="${f.id}:${c.index}" ${c.visible ? 'checked' : ''}><i class="swatch" style="background:${c.color}"></i><span title="${esc(c.name)}">${esc(c.name)}</span></label><select class="axis-select" data-axis="${f.id}:${c.index}" aria-label="${esc(f.name + ' ' + c.name)} 座標軸"><option value="0" ${c.axis === 0 ? 'selected' : ''}>左</option><option value="1" ${c.axis === 1 ? 'selected' : ''}>右</option></select></div>`).join('')}`).join('') || '<div class="subtle-empty">匯入後即可選擇訊號</div>';
+  $('fileList').innerHTML = state.files.map(f => `
+    <div class="file-card ${f.visible === false ? 'unchecked' : ''} ${state.activeReportId === f.id ? 'selected' : ''}" data-report="${f.id}">
+      <div class="file-top">
+        <label class="file-check-wrap" title="${f.visible === false ? '勾選以在圖表中顯示此報表' : '取消勾選以隱藏此報表'}">
+          <input type="checkbox" class="file-checkbox" data-file-check="${f.id}" ${f.visible !== false ? 'checked' : ''} aria-label="顯示報表 ${esc(f.name)}">
+        </label>
+        <button class="file-select" data-select-report="${f.id}" aria-pressed="${state.activeReportId === f.id}" aria-label="操作報表 ${esc(f.name)}" title="點擊設為操作中報表 (單選聚焦)">
+          <span class="swatch" style="background:${f.channels[0].color}"></span>
+          <span class="file-name" title="${esc(f.name)}">${esc(f.name)}</span>
+          <span class="selected-badge">${state.activeReportId === f.id ? '操作中' : ''}</span>
+        </button>
+        <button class="remove" data-remove="${f.id}" aria-label="移除 ${esc(f.name)}">×</button>
+      </div>
+      <div class="file-meta">${f.rows.length.toLocaleString()} 筆 · ${f.channels.length} 通道${f.skipped ? ' · ' + f.skipped + ' 列略過' : ''}</div>
+      <label class="offset-field">時間偏移 <input type="number" step="0.1" data-offset="${f.id}" value="${f.offset}" aria-label="${esc(f.name)} 時間偏移秒數"> 秒</label>
+    </div>
+  `).join('');
+
+  $('channels').innerHTML = state.files.map(f => `
+    <div class="channel-group-name ${state.activeReportId === f.id ? 'active' : ''} ${f.visible === false ? 'unchecked' : ''}" data-group-report="${f.id}" title="${esc(f.name)}">${esc(f.name)}</div>
+    ${f.channels.map(c => `
+      <div class="channel-row">
+        <label>
+          <input type="checkbox" data-channel="${f.id}:${c.index}" ${c.visible ? 'checked' : ''}>
+          <i class="swatch" style="background:${c.color}"></i>
+          <span title="${esc(c.name)}">${esc(c.name)}</span>
+        </label>
+        <select class="axis-select" data-axis="${f.id}:${c.index}" aria-label="${esc(f.name + ' ' + c.name)} 座標軸">
+          <option value="0" ${c.axis === 0 ? 'selected' : ''}>左</option>
+          <option value="1" ${c.axis === 1 ? 'selected' : ''}>右</option>
+        </select>
+      </div>
+    `).join('')}
+  `).join('') || '<div class="subtle-empty">匯入後即可選擇訊號</div>';
+
   for(const id of ['referenceFile', 'movingFile']){
     const old = $(id).value;
     $(id).innerHTML = state.files.map(f => `<option value="${f.id}">${esc(f.name)}</option>`).join('') || '<option value="">請先匯入檔案</option>';
@@ -273,48 +308,49 @@ function rebuild(){
 }
 
 function syncReportSelection(){
-  const sel = state.selectedReportIds || [];
-  const isCmp = sel.length === 2;
-
-  const clearBtn = $('clearSelectionBtn');
-  if(clearBtn) clearBtn.style.display = sel.length > 0 ? 'inline-block' : 'none';
+  const activeId = state.activeReportId;
 
   document.querySelectorAll('[data-report]').forEach(card => {
     const id = +card.dataset.report;
-    const isFirst = sel[0] === id;
-    const isSecond = sel[1] === id;
-    const isSelected = isFirst || isSecond;
+    const f = state.files.find(item => item.id === id);
+    const isVisible = f ? f.visible !== false : true;
+    const isActive = activeId === id;
 
-    card.classList.toggle('selected', isSelected);
-    card.classList.toggle('selected-ref', isFirst);
-    card.classList.toggle('selected-cmp', isSecond);
-    card.classList.toggle('not-comparing', sel.length > 0 && !isSelected);
+    card.classList.toggle('selected', isActive);
+    card.classList.toggle('unchecked', !isVisible);
+
+    const checkbox = card.querySelector(`[data-file-check="${id}"]`);
+    if(checkbox) checkbox.checked = isVisible;
 
     const btn = card.querySelector('[data-select-report]');
-    if(btn) btn.setAttribute('aria-pressed', String(isSelected));
+    if(btn) btn.setAttribute('aria-pressed', String(isActive));
 
     const badge = card.querySelector('.selected-badge');
     if(badge){
-      if(isCmp){
-        if(isFirst){
-          badge.textContent = '基準 A';
-          badge.className = 'selected-badge';
-        } else if(isSecond){
-          badge.textContent = '比較 B';
-          badge.className = 'selected-badge badge-cmp';
-        }
-      } else if(isFirst){
-        badge.textContent = '操作中';
-        badge.className = 'selected-badge';
-      }
+      badge.textContent = isActive ? '操作中' : '';
     }
   });
 
   document.querySelectorAll('[data-group-report]').forEach(grp => {
     const id = +grp.dataset.groupReport;
-    const isSelected = sel.includes(id);
-    grp.classList.toggle('active', isSelected);
+    const f = state.files.find(item => item.id === id);
+    const isVisible = f ? f.visible !== false : true;
+    const isActive = activeId === id;
+    grp.classList.toggle('active', isActive);
+    grp.classList.toggle('unchecked', !isVisible);
   });
+}
+
+function checkAllReports(checked = true){
+  if(!state.files.length) return;
+  for(const f of state.files){
+    f.visible = checked;
+  }
+  if(!checked) state.activeReportId = null;
+  state.statsDirty = true;
+  syncReportSelection();
+  render();
+  status(checked ? `已全部勾選，顯示全部 ${state.files.length} 份報表。` : '已全部取消勾選，隱藏所有報表。');
 }
 
 function selectReport(id, forceSelect = false){
@@ -322,45 +358,24 @@ function selectReport(id, forceSelect = false){
   const f = state.files.find(f => f.id === targetId);
   if(!f) return;
 
-  if(!state.selectedReportIds) state.selectedReportIds = [];
-  const idx = state.selectedReportIds.indexOf(targetId);
-
-  if(!forceSelect && idx >= 0){
-    state.selectedReportIds.splice(idx, 1);
-  } else if(!forceSelect && state.selectedReportIds.length < 2){
-    state.selectedReportIds.push(targetId);
-  } else if(!forceSelect && state.selectedReportIds.length >= 2){
-    state.selectedReportIds[1] = targetId;
-  } else if(forceSelect){
-    if(!state.selectedReportIds.includes(targetId)){
-      if(state.selectedReportIds.length >= 2) state.selectedReportIds[1] = targetId;
-      else state.selectedReportIds.push(targetId);
-    }
+  if(!forceSelect && state.activeReportId === targetId){
+    state.activeReportId = null;
+    syncReportSelection();
+    render();
+    status('已取消選取操作報表，所有已勾選報表皆正常顯示。');
+    return;
   }
 
-  state.activeReportId = state.selectedReportIds[0] || null;
-
-  if(state.selectedReportIds.length >= 2){
-    $('referenceFile').value = String(state.selectedReportIds[0]);
-    $('movingFile').value = String(state.selectedReportIds[1]);
-    commonSignals();
-  } else if(state.selectedReportIds.length === 1){
-    $('movingFile').value = String(state.selectedReportIds[0]);
+  state.activeReportId = targetId;
+  if(f.visible === false){
+    f.visible = true;
   }
+
+  $('movingFile').value = String(targetId);
 
   syncReportSelection();
   render();
-
-  if(state.selectedReportIds.length === 2){
-    const f1 = state.files.find(f => f.id === state.selectedReportIds[0]);
-    const f2 = state.files.find(f => f.id === state.selectedReportIds[1]);
-    status(`雙報表比較：基準「${f1.name}」vs 比較「${f2.name}」。已高亮兩份報表曲線，其餘報表淡化；標尺浮動框顯示兩者現場數據。`);
-  } else if(state.selectedReportIds.length === 1){
-    const f1 = state.files.find(f => f.id === state.selectedReportIds[0]);
-    status(`操作中：${f1.name}。點選第二份報表即可直接進行雙報表比較。`);
-  } else {
-    status('已取消選取，所有報表曲線皆正常顯示。');
-  }
+  status(`操作中報表：${f.name}。圖表已聚焦高亮此報表；標尺僅顯示操作中報表數據。再次點選卡片即可取消。`);
 }
 
 function commonSignals(){
@@ -376,7 +391,7 @@ function setMode(mode){
   document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
   canvas.style.cursor = mode === 'pan' ? 'grab' : mode === 'shift' ? 'ew-resize' : 'crosshair';
   if(mode === 'shift'){
-    if((!state.selectedReportIds || state.selectedReportIds.length === 0) && $('movingFile').value){
+    if(state.activeReportId === null && $('movingFile').value){
       selectReport(+$('movingFile').value, true);
     }
     const curFile = state.files.find(f => f.id === +$('movingFile').value);
@@ -860,17 +875,17 @@ function draw(){
     ctx.setLineDash([]);
   }
 
-  const selIds = state.selectedReportIds || (state.activeReportId !== null ? [state.activeReportId] : []);
-  const hasFilter = selIds.length > 0;
-  const orderedVisible = hasFilter
-    ? [...visible.filter(s => !selIds.includes(s.f.id)), ...visible.filter(s => selIds.includes(s.f.id))]
+  const activeId = state.activeReportId;
+  const hasActive = activeId !== null && state.files.some(f => f.id === activeId && f.visible !== false);
+  const orderedVisible = hasActive
+    ? [...visible.filter(s => s.f.id !== activeId), ...visible.filter(s => s.f.id === activeId)]
     : visible;
 
   for(const { f, c } of orderedVisible){
-    const isActive = !hasFilter || selIds.includes(f.id);
+    const isActive = !hasActive || f.id === activeId;
     ctx.strokeStyle = c.color;
-    ctx.lineWidth = isActive ? (hasFilter ? 2.4 : 1.4) : 1.0;
-    ctx.globalAlpha = isActive ? 1 : 0.16;
+    ctx.lineWidth = isActive ? (hasActive ? 2.4 : 1.6) : 1.3;
+    ctx.globalAlpha = isActive ? 1 : 0.45;
     ctx.beginPath();
     let started = false, bucket = -Infinity, group = [];
     const emit = (r) => {
@@ -923,8 +938,8 @@ function draw(){
       ctx.stroke();
       ctx.setLineDash([]);
       for(const { f, c } of visible){
-        if(hasFilter && !selIds.includes(f.id)) continue;
-        const isActive = !hasFilter || selIds.includes(f.id);
+        if(hasActive && f.id !== activeId) continue;
+        const isActive = !hasActive || f.id === activeId;
         ctx.globalAlpha = isActive ? 1 : 0.22;
         const r = nearest(f, t), v = r ? val(f, c, r) : null;
         if(v !== null){
@@ -1015,7 +1030,7 @@ function statsFor(f, c){
 
 function updateReadouts(){
   const channels = selected();
-  $('totalRows').textContent = state.files.length ? state.files.reduce((n, f) => n + f.rows.length, 0).toLocaleString() : '—';
+  $('totalRows').textContent = state.files.length ? state.files.filter(f => f.visible !== false).reduce((n, f) => n + f.rows.length, 0).toLocaleString() : '—';
   $('visibleChannels').textContent = state.files.length ? channels.length : '—';
   $('duration').textContent = state.view ? elapsed(state.view[1] - state.view[0]) : '—';
   $('rangeCaption').textContent = state.view ? (state.alignment === 'elapsed' ? '起始歸零' : '實際時間') + ' · ' + (state.scale === 'delta' ? '相對變化' : '原始數值') : '等待資料匯入';
@@ -1126,27 +1141,17 @@ function updateReadouts(){
     return `<span class="jump-time" data-jump-cursor="${cursorTarget}" data-jump-t="${r.t}" data-jump-name="${esc(c.name)}" data-jump-val="${fmt(valNum)}" title="點擊將 ${cursorName} 標尺直接定位到此時間 (${dateText(r.t)})">${fmt(valNum)} <span class="jump-pin">⌖</span><small>${esc(dateText(r.t))}<br>原始列 ${r.row}</small></span>`;
   };
 
-  const selIds = state.selectedReportIds || (state.activeReportId !== null ? [state.activeReportId] : []);
-  const hasFilter = selIds.length > 0;
-  const isCmp = selIds.length === 2;
+  const activeId = state.activeReportId;
+  const hasActive = activeId !== null && state.files.some(f => f.id === activeId && f.visible !== false);
 
   $('statsBody').innerHTML = filtered.map(it => {
     const { f, c, a, b, av, bv, delta, s } = it;
-    const isOperating = hasFilter && selIds.includes(f.id);
-    const isDimmed = hasFilter && !selIds.includes(f.id);
-    const isFirst = selIds[0] === f.id;
-    const isSecond = selIds[1] === f.id;
-
-    let badgeHtml = '';
-    if(isCmp){
-      if(isFirst) badgeHtml = ' <span class="badge-mini" style="background:rgba(67,228,216,0.22);color:#43e4d8;">基準 A</span>';
-      else if(isSecond) badgeHtml = ' <span class="badge-mini" style="background:rgba(181,155,255,0.22);color:#b59bff;">比較 B</span>';
-    } else if(isFirst){
-      badgeHtml = ' <span class="badge-mini">操作中</span>';
-    }
+    const isOperating = hasActive && f.id === activeId;
+    const isDimmed = hasActive && f.id !== activeId;
+    const badgeHtml = isOperating ? ' <span class="badge-mini">操作中</span>' : '';
 
     const rowClass = isOperating ? 'row-active' : isDimmed ? 'row-dimmed' : '';
-    return `<tr class="row-clickable ${rowClass}" data-report-id="${f.id}" title="點擊切換聚焦高亮此報表曲線">
+    return `<tr class="row-clickable ${rowClass}" data-report-id="${f.id}" title="點擊設為操作中報表 (單選聚焦)">
       <td><i class="swatch" style="background:${c.color}"></i>${esc(c.name)}${badgeHtml} <small title="${esc(f.name)}">${esc(f.name)} · ${c.axis ? '右軸' : '左軸'} · 偏移 ${fmt(f.offset)} s</small></td>
       <td>${cell(f, c, a)}</td>
       <td>${cell(f, c, b)}</td>
@@ -1244,20 +1249,18 @@ function updateHoverTip(x, y, t, cursorIdx = -1){
   const tip = $('hoverTip');
   if(!tip || !state.view) return;
   const s = selected();
-  const selIds = state.selectedReportIds || (state.activeReportId !== null ? [state.activeReportId] : []);
-  const isCmp = selIds.length === 2;
-  const isSingle = selIds.length === 1;
+  const activeId = state.activeReportId;
+  const hasActive = activeId !== null && state.files.some(f => f.id === activeId && f.visible !== false);
 
   let targetSignals = s;
-  if(selIds.length > 0){
-    targetSignals = s.filter(({ f }) => selIds.includes(f.id));
+  if(hasActive){
+    targetSignals = s.filter(({ f }) => f.id === activeId);
   }
 
   let html = '';
   if(cursorIdx >= 0){
     const cursorName = cursorIdx === 0 ? 'A' : 'B';
     const cursorColor = cursorIdx === 0 ? '#43e4d8' : '#b59bff';
-    const otherTime = state.cursors[cursorIdx === 0 ? 1 : 0];
     const isBoth = state.cursors[0] !== null && state.cursors[1] !== null;
     const deltaText = isBoth
       ? `<span style="color:#8ba4b9;font-size:9.5px;margin-left:auto;">Δt: ${elapsed(Math.abs(state.cursors[1] - state.cursors[0]), true)}</span>`
@@ -1271,44 +1274,15 @@ function updateHoverTip(x, y, t, cursorIdx = -1){
     html += `<div style="margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #3c536a;"><strong>${esc(timeText(t))}</strong></div>`;
   }
 
-  if(isCmp){
-    const f1 = state.files.find(f => f.id === selIds[0]);
-    const f2 = state.files.find(f => f.id === selIds[1]);
-    const s1 = targetSignals.filter(({ f }) => f.id === selIds[0]);
-    const s2 = targetSignals.filter(({ f }) => f.id === selIds[1]);
-
-    const renderSub = (file, sigs, badgeText, badgeColor, badgeBg) => {
-      let sub = `<div style="font-size:10px;margin:5px 0 3px;display:flex;align-items:center;gap:4px;">
-        <span style="background:${badgeBg};color:${badgeColor};padding:1px 5px;border-radius:3px;font-weight:700;font-size:9.5px;">${badgeText}</span>
-        <span style="color:#e6fbf9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px;" title="${esc(file.name)}">${esc(file.name)}</span>
-      </div>`;
-      if(sigs.length === 0){
-        sub += `<div style="color:#8ba4b9;font-size:9.5px;padding-left:6px;">未選取通道</div>`;
-      } else {
-        sub += sigs.slice(0, 6).map(({ f, c }) => {
-          const r = nearest(f, t);
-          const valStr = r ? fmt(val(f, c, r)) : '—';
-          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0;padding-left:4px;">
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:145px;"><span style="color:${c.color}">●</span> ${esc(c.name)}</span>
-            <strong style="color:#e6fbf9;font-family:var(--mono);">${valStr}</strong>
-          </div>`;
-        }).join('');
-      }
-      return sub;
-    };
-
-    if(f1) html += renderSub(f1, s1, '基準 A', '#43e4d8', 'rgba(67,228,216,0.18)');
-    html += '<div style="border-top:1px dashed #24384d;margin:5px 0 3px;"></div>';
-    if(f2) html += renderSub(f2, s2, '比較 B', '#b59bff', 'rgba(181,155,255,0.18)');
-  } else if(isSingle){
-    const f1 = state.files.find(f => f.id === selIds[0]);
-    if(f1){
+  if(hasActive){
+    const activeFile = state.files.find(f => f.id === activeId);
+    if(activeFile){
       html += `<div style="font-size:10px;color:var(--cyan);margin-bottom:5px;display:flex;align-items:center;gap:4px;">
         <span style="background:rgba(67,228,216,0.18);padding:1px 5px;border-radius:3px;font-weight:600;">操作中</span>
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px;" title="${esc(f1.name)}">${esc(f1.name)}</span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px;" title="${esc(activeFile.name)}">${esc(activeFile.name)}</span>
       </div>`;
     }
-    const displaySignals = targetSignals.slice(0, 8);
+    const displaySignals = targetSignals.slice(0, 10);
     html += displaySignals.map(({ f, c }) => {
       const r = nearest(f, t);
       const valStr = r ? fmt(val(f, c, r)) : '—';
@@ -1317,18 +1291,40 @@ function updateHoverTip(x, y, t, cursorIdx = -1){
         <strong style="color:#e6fbf9;font-family:var(--mono);">${valStr}</strong>
       </div>`;
     }).join('');
-  } else {
-    const displaySignals = targetSignals.slice(0, 8);
-    html += displaySignals.map(({ f, c }) => {
-      const r = nearest(f, t);
-      const valStr = r ? fmt(val(f, c, r)) : '—';
-      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:3px 0;">
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;"><span style="color:${c.color}">●</span> ${esc(c.name)} · #${f.id}</span>
-        <strong style="color:#e6fbf9;font-family:var(--mono);">${valStr}</strong>
-      </div>`;
-    }).join('');
-    if(targetSignals.length > 8){
+    if(targetSignals.length > 10){
       html += `<div style="font-size:9px;color:#8ba4b9;margin-top:4px;">其他訊號請查看下方標尺表格</div>`;
+    }
+  } else {
+    const visibleFiles = state.files.filter(f => f.visible !== false);
+    if(visibleFiles.length > 1){
+      for(const f of visibleFiles){
+        const fSignals = targetSignals.filter(it => it.f.id === f.id);
+        if(!fSignals.length) continue;
+        html += `<div style="font-size:9.5px;color:#8ba4b9;margin:4px 0 2px;font-weight:600;display:flex;align-items:center;gap:4px;">
+          <span>◈</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;" title="${esc(f.name)}">${esc(f.name)}</span>
+        </div>`;
+        html += fSignals.slice(0, 4).map(({ c }) => {
+          const r = nearest(f, t);
+          const valStr = r ? fmt(val(f, c, r)) : '—';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0;padding-left:6px;">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;"><span style="color:${c.color}">●</span> ${esc(c.name)}</span>
+            <strong style="color:#e6fbf9;font-family:var(--mono);">${valStr}</strong>
+          </div>`;
+        }).join('');
+      }
+    } else {
+      const displaySignals = targetSignals.slice(0, 8);
+      html += displaySignals.map(({ f, c }) => {
+        const r = nearest(f, t);
+        const valStr = r ? fmt(val(f, c, r)) : '—';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin:3px 0;">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;"><span style="color:${c.color}">●</span> ${esc(c.name)}</span>
+          <strong style="color:#e6fbf9;font-family:var(--mono);">${valStr}</strong>
+        </div>`;
+      }).join('');
+      if(targetSignals.length > 8){
+        html += `<div style="font-size:9px;color:#8ba4b9;margin-top:4px;">其他訊號請查看下方標尺表格</div>`;
+      }
     }
   }
 
@@ -1481,13 +1477,17 @@ canvas.addEventListener('keydown', e => {
   render();
 });
 
-canvas.addEventListener('contextmenu', e => {
+function openContextMenu(e){
   e.preventDefault();
   const menu = $('contextMenu');
   menu.hidden = false;
-  menu.style.left = Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 10) + 'px';
-  menu.style.top = Math.max(5, Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 10) + 'px');
-});
+  menu.style.display = 'block';
+  menu.style.left = Math.min(e.clientX, window.innerWidth - (menu.offsetWidth || 230) - 10) + 'px';
+  menu.style.top = Math.max(5, Math.min(e.clientY, window.innerHeight - (menu.offsetHeight || 260) - 10) + 'px');
+}
+
+canvas.addEventListener('contextmenu', openContextMenu);
+$('sidebar').addEventListener('contextmenu', openContextMenu);
 
 document.addEventListener('click', e => { if(!$('contextMenu').contains(e.target)) $('contextMenu').hidden = true; });
 document.addEventListener('keydown', e => { if(e.key === 'Escape'){ $('contextMenu').hidden = true; } });
@@ -1495,6 +1495,9 @@ document.addEventListener('keydown', e => { if(e.key === 'Escape'){ $('contextMe
 $('contextMenu').addEventListener('click', e => {
   const action = e.target.closest('[data-action]')?.dataset.action;
   $('contextMenu').hidden = true;
+  if(!action) return;
+  if(action === 'checkAllReports'){ checkAllReports(true); return; }
+  if(action === 'uncheckAllReports'){ checkAllReports(false); return; }
   if(action === 'resetLayout'){ resetDefaultLayout(); return; }
   if(!state.view) return;
   if(action === 'reset') reset();
@@ -1503,6 +1506,9 @@ $('contextMenu').addEventListener('click', e => {
   if(action === 'clear'){ state.range = null; changed(); }
   if(action === 'image') exportImage();
 });
+
+if($('checkAllReportsBtn')) $('checkAllReportsBtn').onclick = () => checkAllReports(true);
+if($('uncheckAllReportsBtn')) $('uncheckAllReportsBtn').onclick = () => checkAllReports(false);
 
 for(const id of ['importBtn', 'dropZone']) $(id).onclick = () => $('fileInput').click();
 $('fileInput').onchange = e => importFiles([...e.target.files]);
@@ -1515,21 +1521,37 @@ window.addEventListener('drop', e => e.preventDefault());
 
 $('fileList').addEventListener('click', e => {
   const id = e.target.closest('[data-remove]')?.dataset.remove;
-  if(!id){
-    if(e.target.closest('input,label')) return;
-    const card = e.target.closest('[data-report]');
-    if(card) selectReport(card.dataset.report);
+  if(id){
+    state.files = state.files.filter(f => f.id !== +id);
+    if(state.activeReportId === +id) state.activeReportId = null;
+    rebuild();
+    state.range = null;
+    reset();
     return;
   }
-  state.files = state.files.filter(f => f.id !== +id);
-  state.selectedReportIds = (state.selectedReportIds || []).filter(sid => sid !== +id);
-  state.activeReportId = state.selectedReportIds[0] || null;
-  rebuild();
-  state.range = null;
-  reset();
+  if(e.target.closest('input, label.file-check-wrap, label.offset-field')) return;
+  const card = e.target.closest('[data-report]');
+  if(card) selectReport(card.dataset.report);
 });
 
 $('fileList').addEventListener('change', e => {
+  const check = e.target.closest('[data-file-check]');
+  if(check){
+    const id = +check.dataset.fileCheck;
+    const f = state.files.find(f => f.id === id);
+    if(f){
+      f.visible = check.checked;
+      if(!f.visible && state.activeReportId === f.id){
+        state.activeReportId = null;
+      }
+      state.statsDirty = true;
+      syncReportSelection();
+      render();
+      const visCount = state.files.filter(f => f.visible !== false).length;
+      status(`已${f.visible ? '勾選顯示' : '取消勾選隱藏'}報表「${f.name}」，目前顯示 ${visCount} / ${state.files.length} 份報表。`);
+    }
+    return;
+  }
   if(!e.target.matches('[data-offset]')) return;
   const n = Number(e.target.value);
   if(!Number.isFinite(n)) return;
@@ -1564,7 +1586,6 @@ $('allChannels').onclick = () => {
 $('clearBtn').onclick = () => {
   state.files = [];
   state.activeReportId = null;
-  state.selectedReportIds = [];
   state.demo = false;
   state.range = null;
   state.cursors = [null, null];
@@ -1572,16 +1593,6 @@ $('clearBtn').onclick = () => {
   reset();
   status('資料已清空，請匯入新檔案。');
 };
-
-if($('clearSelectionBtn')){
-  $('clearSelectionBtn').onclick = () => {
-    state.selectedReportIds = [];
-    state.activeReportId = null;
-    syncReportSelection();
-    render();
-    status('已取消選取，所有報表曲線皆正常顯示。');
-  };
-}
 
 $('alignment').onchange = e => {
   state.alignment = e.target.value;
